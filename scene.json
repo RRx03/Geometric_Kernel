@@ -1,0 +1,13 @@
+{
+  "type": "Union",
+  "left": {
+    "type": "Rect2D",
+    "position": [1.5, 0.0],
+    "bounds": [0.2, 2.0]
+  },
+  "right": {
+    "type": "Circle2D",
+    "position": [1.5, -2.0],
+    "radius": 0.8
+  }
+}

@@ -61,29 +61,50 @@ vertex RasterizerData vertex_main(uint vertexID [[vertex_id]]) {
     return out;
 }
 
-
+float3 calcNormal(float3 p, constant SDFNodeGPU* nodes, int nodeCount) {
+    float2 e = float2(0.001, 0.0);
+    return normalize(float3(
+        map(p + e.xyy, nodes, nodeCount) - map(p - e.xyy, nodes, nodeCount),
+        map(p + e.yxy, nodes, nodeCount) - map(p - e.yxy, nodes, nodeCount),
+        map(p + e.yyx, nodes, nodeCount) - map(p - e.yyx, nodes, nodeCount)
+    ));
+}
 fragment float4 fragment_main(
     RasterizerData in [[stage_in]],
     constant Uniforms& uniforms [[buffer(1)]],
-    constant SDFNodeGPU* sdfNodes [[buffer(2)]], // Notre arbre C++ arrive ici !
+    constant SDFNodeGPU* sdfNodes [[buffer(2)]],
     constant int& sdfNodeCount [[buffer(3)]]
 ) {
-
-    float3 ro = float3(0.0, 0.0, -5.0);
-    float3 rd = normalize(float3(in.uv, 1.0));
+    float3 ro = uniforms.camPos; 
+    float3 rd = normalize(in.uv.x * uniforms.camRight + in.uv.y * uniforms.camUp + uniforms.camForward);
     
-    float t = 0.0; 
+    // Ray Marching
+    float t = 0.0;
     for(int i = 0; i < 100; i++) {
         float3 p = ro + rd * t;
         float d = map(p, sdfNodes, sdfNodeCount);
         
         if(d < 0.001) {
-            float col = 1.0 - (float(i) / 100.0);
-            return float4(col, col * 0.2, col * 0.2, 1.0);
+            // --- Touched Surface ---
+            float3 n = calcNormal(p, sdfNodes, sdfNodeCount); // Normale
+            float3 lightDir = normalize(float3(1.0, 1.0, 1.0)); // Light coming from above-right-front
+            
+            // Lambert Law
+            float diff = max(dot(n, lightDir), 0.1); // 0.1 = ambient minimum
+            
+            // Simple Ambient Occlusion based on number of steps taken (more steps = more occluded)
+            float ao = 1.0 - (float(i) / 100.0);
+            
+            // Base color (light gray) modulated by diffuse and ambient occlusion
+            float3 baseColor = float3(0.8, 0.8, 0.85); 
+            float3 finalColor = baseColor * diff * ao;
+            
+            return float4(finalColor, 1.0);
         }
         if(t > 100.0) break;
         t += d;
     }
     
-    return float4(0.1, 0.1, 0.1, 1.0);
+    // Background color
+    return float4(0.15, 0.15, 0.15, 1.0); 
 }

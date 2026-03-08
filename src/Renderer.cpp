@@ -1,6 +1,7 @@
 #include "Renderer.hpp"
 #include "MathUtils.h"
 #include "SDFNode.hpp"
+#include "SceneParser.hpp"
 #include "Shared.h"
 #include <iostream>
 Renderer::Renderer(SDL_Window *window) {
@@ -91,11 +92,13 @@ void Renderer::buildShaders() {
   defaultLibrary->release();
 }
 void Renderer::buildBuffers() {
-  auto sphere = std::make_shared<Geometry::Sphere>(
-      simd_make_float3(-0.8f, 0.0f, 0.0f), 1.2f);
-  auto box = std::make_shared<Geometry::Box>(
-      simd_make_float3(0.8f, 0.0f, 0.0f), simd_make_float3(1.0f, 1.0f, 1.0f));
-  auto myPart = std::make_shared<Geometry::Union>(sphere, box);
+  auto myPart = SceneParser::parseFile("scene.json");
+
+  if (!myPart) {
+    std::cerr << "ERREUR: Impossible de parser scene.json ou type inconnu."
+              << std::endl;
+    return;
+  }
 
   std::vector<SDFNodeGPU> gpuSDFArray;
   myPart->flatten(gpuSDFArray);
@@ -111,12 +114,10 @@ void Renderer::buildBuffers() {
 void Renderer::orbit(float dx, float dy) {
   _camAzimuth -= dx * 0.01f;
   _camElevation += dy * 0.01f;
-  // Bloquer l'élévation pour ne pas faire de looping (Gimbal lock)
   _camElevation = std::max(-1.5f, std::min(1.5f, _camElevation));
 }
 
 void Renderer::pan(float dx, float dy) {
-  // Calcul simple pour bouger la cible (Target) selon la vue
   float panSpeed = 0.01f;
   _camTarget.x -=
       cos(_camAzimuth) * dx * panSpeed + sin(_camAzimuth) * dy * panSpeed;
@@ -127,32 +128,23 @@ void Renderer::pan(float dx, float dy) {
 
 void Renderer::zoom(float dz) {
   _camDistance -= dz * 0.5f;
-  _camDistance = std::max(0.5f, _camDistance); // Ne pas traverser l'origine
+  _camDistance = std::max(0.5f, _camDistance);
 }
-
 void Renderer::updateUniforms() {
   Uniforms u;
 
-  // Le monde ne tourne plus tout seul !
-  u.modelMatrix = Math::makeIdentity();
-
-  // Calcul de la position de la caméra sphérique
   float cx =
       _camTarget.x + _camDistance * cos(_camElevation) * sin(_camAzimuth);
   float cy = _camTarget.y + _camDistance * sin(_camElevation);
   float cz =
       _camTarget.z + _camDistance * cos(_camElevation) * cos(_camAzimuth);
 
-  // Pour l'instant, on triche avec Translate + RotateY + RotateX
-  // Idéalement, il faut une vraie fonction Math::makeLookAt()
-  simd::float4x4 rot = Math::makeYRotation(-_camAzimuth); // Rotation inverse
-  simd::float4x4 trans = Math::makeTranslate({-cx, -cy, -cz});
-  u.viewMatrix =
-      simd_mul(rot, trans); // (Simplification temporaire sans LookAt complet)
+  u.camPos = {cx, cy, cz};
 
-  float aspect = (float)_width / (float)_height;
-  u.projectionMatrix =
-      Math::makePerspective(Math::radians(45.0f), aspect, 0.1f, 100.0f);
+  u.camForward = simd_normalize(_camTarget - u.camPos);
+  simd::float3 worldUp = {0.0f, 1.0f, 0.0f};
+  u.camRight = simd_normalize(simd_cross(worldUp, u.camForward));
+  u.camUp = simd_cross(u.camForward, u.camRight);
 
   void *ptr = _uniformBuffer->contents();
   memcpy(ptr, &u, sizeof(Uniforms));
@@ -163,34 +155,29 @@ void Renderer::resize(int width, int height) {
   _height = height;
   _layer->setDrawableSize(CGSizeMake(width, height));
 
-  // Nettoyage
   if (_msaaTexture)
     _msaaTexture->release();
   if (_depthTexture)
     _depthTexture->release();
 
-  // 1. Texture Couleur MSAA (Celle où on dessine)
   MTL::TextureDescriptor *msaaDesc = MTL::TextureDescriptor::alloc()->init();
-  msaaDesc->setTextureType(
-      MTL::TextureType2DMultisample); // <--- TYPE MULTISAMPLE
+  msaaDesc->setTextureType(MTL::TextureType2DMultisample);
   msaaDesc->setPixelFormat(MTL::PixelFormatBGRA8Unorm);
   msaaDesc->setWidth(width);
   msaaDesc->setHeight(height);
-  msaaDesc->setSampleCount(_sampleCount); // <--- 4x
+  msaaDesc->setSampleCount(_sampleCount);
   msaaDesc->setUsage(MTL::TextureUsageRenderTarget);
-  msaaDesc->setStorageMode(MTL::StorageModePrivate); // GPU Only
+  msaaDesc->setStorageMode(MTL::StorageModePrivate);
 
   _msaaTexture = _device->newTexture(msaaDesc);
   msaaDesc->release();
 
-  // 2. Texture Profondeur (Doit aussi être MSAA !)
   MTL::TextureDescriptor *depthDesc = MTL::TextureDescriptor::alloc()->init();
-  depthDesc->setTextureType(
-      MTL::TextureType2DMultisample); // <--- TYPE MULTISAMPLE
+  depthDesc->setTextureType(MTL::TextureType2DMultisample);
   depthDesc->setPixelFormat(MTL::PixelFormatDepth32Float);
   depthDesc->setWidth(width);
   depthDesc->setHeight(height);
-  depthDesc->setSampleCount(_sampleCount); // <--- 4x doit matcher !
+  depthDesc->setSampleCount(_sampleCount);
   depthDesc->setUsage(MTL::TextureUsageRenderTarget);
   depthDesc->setStorageMode(MTL::StorageModePrivate);
 

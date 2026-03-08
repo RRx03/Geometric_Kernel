@@ -49,18 +49,14 @@ int main() {
           event.window.event == SDL_WINDOWEVENT_RESIZED) {
         renderer->resize(event.window.data1, event.window.data2);
       }
-      // ... dans la boucle d'évènements while (SDL_PollEvent(&event))
       if (event.type == SDL_MOUSEMOTION) {
         if (event.motion.state & SDL_BUTTON_LMASK) {
-          // Clic gauche : Orbit
           renderer->orbit(event.motion.xrel, event.motion.yrel);
         } else if (event.motion.state & SDL_BUTTON_RMASK) {
-          // Clic droit : Pan (déplacement X/Y)
           renderer->pan(event.motion.xrel, event.motion.yrel);
         }
       }
       if (event.type == SDL_MOUSEWHEEL) {
-        // Molette : Zoom
         renderer->zoom(event.wheel.y);
       }
     }
