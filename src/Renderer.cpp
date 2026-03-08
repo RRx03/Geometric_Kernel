@@ -1,8 +1,8 @@
 #include "Renderer.hpp"
 #include "MathUtils.h"
+#include "SDFNode.hpp"
 #include "Shared.h"
 #include <iostream>
-
 Renderer::Renderer(SDL_Window *window) {
   this->_device = MTL::CreateSystemDefaultDevice();
   if (!this->_device) {
@@ -37,10 +37,6 @@ Renderer::~Renderer() {
   if (_depthStencilState)
     _depthStencilState->release();
 
-  if (_computePSO)
-    _computePSO->release();
-  if (_computeBuffer)
-    _computeBuffer->release();
   if (_commandQueue)
     _commandQueue->release();
   if (_device)
@@ -88,35 +84,29 @@ void Renderer::buildShaders() {
     std::cerr << "Erreur PSO Graphique: "
               << error->localizedDescription()->utf8String() << std::endl;
 
-  MTL::Function *computeFn = defaultLibrary->newFunction(
-      NS::String::string("compute_main", NS::UTF8StringEncoding));
-  _computePSO = _device->newComputePipelineState(computeFn, &error);
-  if (!_computePSO)
-    std::cerr << "Erreur PSO Compute: "
-              << error->localizedDescription()->utf8String() << std::endl;
-
   vertexFn->release();
   fragFn->release();
-  computeFn->release();
+
   pipeDesc->release();
   defaultLibrary->release();
 }
 void Renderer::buildBuffers() {
-  std::vector<VertexData> vertices = {
-      {{0.0f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-      {{-0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-      {{0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}}};
+  auto sphere = std::make_shared<Geometry::Sphere>(
+      simd_make_float3(-0.8f, 0.0f, 0.0f), 1.2f);
+  auto box = std::make_shared<Geometry::Box>(
+      simd_make_float3(0.8f, 0.0f, 0.0f), simd_make_float3(1.0f, 1.0f, 1.0f));
+  auto myPart = std::make_shared<Geometry::Union>(sphere, box);
 
-  size_t bufferSize = vertices.size() * sizeof(VertexData);
-  _vertexBuffer = _device->newBuffer(vertices.data(), bufferSize,
-                                     MTL::ResourceStorageModeShared);
+  std::vector<SDFNodeGPU> gpuSDFArray;
+  myPart->flatten(gpuSDFArray);
+  _sdfNodeCount = (int)gpuSDFArray.size();
+
+  _sdfBuffer = _device->newBuffer(gpuSDFArray.data(),
+                                  gpuSDFArray.size() * sizeof(SDFNodeGPU),
+                                  MTL::ResourceStorageModeShared);
 
   _uniformBuffer =
       _device->newBuffer(sizeof(Uniforms), MTL::ResourceStorageModeShared);
-
-  size_t computeBufferSize = sizeof(float) * 100;
-  _computeBuffer =
-      _device->newBuffer(computeBufferSize, MTL::ResourceStorageModeShared);
 }
 
 void Renderer::updateUniforms() {
@@ -187,17 +177,6 @@ void Renderer::renderFrame() {
 
     MTL::CommandBuffer *buffer = _commandQueue->commandBuffer();
 
-    MTL::ComputeCommandEncoder *computeEncoder =
-        buffer->computeCommandEncoder();
-    computeEncoder->setComputePipelineState(_computePSO);
-    computeEncoder->setBuffer(_computeBuffer, 0, 0);
-
-    MTL::Size gridSize = MTL::Size::Make(100, 1, 1);
-    MTL::Size threadGroupSize =
-        MTL::Size::Make(_computePSO->maxTotalThreadsPerThreadgroup(), 1, 1);
-    computeEncoder->dispatchThreads(gridSize, threadGroupSize);
-    computeEncoder->endEncoding();
-
     MTL::RenderPassDescriptor *pass =
         MTL::RenderPassDescriptor::renderPassDescriptor();
     MTL::RenderPassColorAttachmentDescriptor *colorAttachment =
@@ -223,11 +202,13 @@ void Renderer::renderFrame() {
     renderEncoder->setRenderPipelineState(_renderPSO);
     renderEncoder->setDepthStencilState(_depthStencilState);
 
-    renderEncoder->setVertexBuffer(_vertexBuffer, 0, 0);
-    renderEncoder->setVertexBuffer(_uniformBuffer, 0, 1);
+    renderEncoder->setFragmentBuffer(_uniformBuffer, 0, 1);
 
-    renderEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0),
-                                  NS::UInteger(3));
+    renderEncoder->setFragmentBuffer(_sdfBuffer, 0, 2);
+    renderEncoder->setFragmentBytes(&_sdfNodeCount, sizeof(int), 3);
+
+    renderEncoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip,
+                                  NS::UInteger(0), NS::UInteger(4));
 
     renderEncoder->endEncoding();
 

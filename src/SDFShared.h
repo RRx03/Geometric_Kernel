@@ -1,7 +1,16 @@
 #ifndef SDFShared_h
 #define SDFShared_h
 
+#ifdef __METAL_VERSION__
+
+#define SDF_FLOAT3 float3
+#define SDF_FLOAT4 float4
+#else
+
 #include <simd/simd.h>
+#define SDF_FLOAT3 simd::float3
+#define SDF_FLOAT4 simd::float4
+#endif
 
 enum SDFNodeType {
   SDF_TYPE_SPHERE = 0,
@@ -18,8 +27,8 @@ struct SDFNodeGPU {
   int leftChildIndex;
   int rightChildIndex;
 
-  simd::float3 position;
-  simd::float4 params;
+  SDF_FLOAT3 position;
+  SDF_FLOAT4 params;
 
   float smoothFactor;
 };

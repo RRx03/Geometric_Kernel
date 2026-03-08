@@ -20,14 +20,15 @@ private:
   MTL::CommandQueue *_commandQueue = nullptr;
   CA::MetalLayer *_layer = nullptr;
 
-  MTL::ComputePipelineState *_computePSO = nullptr;
   MTL::RenderPipelineState *_renderPSO = nullptr;
   MTL::Texture *_depthTexture = nullptr;
   MTL::DepthStencilState *_depthStencilState = nullptr;
 
   MTL::Buffer *_vertexBuffer = nullptr;
-  MTL::Buffer *_computeBuffer = nullptr;
   MTL::Buffer *_uniformBuffer;
+
+  MTL::Buffer *_sdfBuffer = nullptr;
+  int _sdfNodeCount = 0;
 
   float _angle;        // TEMPLATE
   int _width, _height; // Pour le ratio d'aspect
