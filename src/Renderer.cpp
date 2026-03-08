@@ -108,15 +108,47 @@ void Renderer::buildBuffers() {
   _uniformBuffer =
       _device->newBuffer(sizeof(Uniforms), MTL::ResourceStorageModeShared);
 }
+void Renderer::orbit(float dx, float dy) {
+  _camAzimuth -= dx * 0.01f;
+  _camElevation += dy * 0.01f;
+  // Bloquer l'élévation pour ne pas faire de looping (Gimbal lock)
+  _camElevation = std::max(-1.5f, std::min(1.5f, _camElevation));
+}
+
+void Renderer::pan(float dx, float dy) {
+  // Calcul simple pour bouger la cible (Target) selon la vue
+  float panSpeed = 0.01f;
+  _camTarget.x -=
+      cos(_camAzimuth) * dx * panSpeed + sin(_camAzimuth) * dy * panSpeed;
+  _camTarget.y += dy * panSpeed;
+  _camTarget.z -=
+      sin(_camAzimuth) * dx * panSpeed - cos(_camAzimuth) * dy * panSpeed;
+}
+
+void Renderer::zoom(float dz) {
+  _camDistance -= dz * 0.5f;
+  _camDistance = std::max(0.5f, _camDistance); // Ne pas traverser l'origine
+}
 
 void Renderer::updateUniforms() {
-  _angle += 0.01f;
-
   Uniforms u;
 
-  u.modelMatrix = Math::makeYRotation(_angle);
+  // Le monde ne tourne plus tout seul !
+  u.modelMatrix = Math::makeIdentity();
 
-  u.viewMatrix = Math::makeTranslate({0.0f, 0.0f, -3.0f});
+  // Calcul de la position de la caméra sphérique
+  float cx =
+      _camTarget.x + _camDistance * cos(_camElevation) * sin(_camAzimuth);
+  float cy = _camTarget.y + _camDistance * sin(_camElevation);
+  float cz =
+      _camTarget.z + _camDistance * cos(_camElevation) * cos(_camAzimuth);
+
+  // Pour l'instant, on triche avec Translate + RotateY + RotateX
+  // Idéalement, il faut une vraie fonction Math::makeLookAt()
+  simd::float4x4 rot = Math::makeYRotation(-_camAzimuth); // Rotation inverse
+  simd::float4x4 trans = Math::makeTranslate({-cx, -cy, -cz});
+  u.viewMatrix =
+      simd_mul(rot, trans); // (Simplification temporaire sans LookAt complet)
 
   float aspect = (float)_width / (float)_height;
   u.projectionMatrix =

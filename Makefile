@@ -7,7 +7,7 @@ BIN_PATH = $(BUILD_DIR)/$(APP_NAME)
 METALLIB = $(BUILD_DIR)/default.metallib
 
 CXX = clang++
-CXXFLAGS = -std=c++17 -I. -I$(SRC_FOLDER) -I/opt/homebrew/include -MMD -MP
+CXXFLAGS = -std=c++17 -I. -I$(SRC_FOLDER) -I/opt/homebrew/include -MMD -MP 
 SDL2_CFLAGS := $(shell sdl2-config --cflags)
 SDL2_LDFLAGS := $(shell sdl2-config --libs)
 FRAMEWORKS = -framework Metal -framework Foundation -framework QuartzCore -framework CoreGraphics
@@ -42,7 +42,8 @@ $(METALLIB): shaders/shader.metal
 	@echo "Shaders compilés dans $(METALLIB)"
 
 -include $(DEPS)
-
+init: 
+	brew install nlohmann-json
 clean:
 	rm -rf $(BUILD_DIR)
 	@echo "Dossier build nettoyé."

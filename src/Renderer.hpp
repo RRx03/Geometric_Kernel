@@ -3,6 +3,7 @@
 #include "metal-cpp/Metal/Metal.hpp"
 #include "metal-cpp/QuartzCore/QuartzCore.hpp"
 #include <SDL.h>
+#include <simd/simd.h>
 
 class Renderer {
 public:
@@ -10,6 +11,10 @@ public:
   ~Renderer();
   void renderFrame();
   void resize(int width, int height);
+
+  void orbit(float dx, float dy);
+  void pan(float dx, float dy);
+  void zoom(float dz);
 
 private:
   void buildShaders();
@@ -30,8 +35,13 @@ private:
   MTL::Buffer *_sdfBuffer = nullptr;
   int _sdfNodeCount = 0;
 
-  float _angle;        // TEMPLATE
-  int _width, _height; // Pour le ratio d'aspect
+  float _angle;
+  int _width, _height;
+
+  float _camDistance = 5.0f;
+  float _camAzimuth = 0.0f;
+  float _camElevation = 0.0f;
+  simd::float3 _camTarget = {0.0f, 0.0f, 0.0f};
 
   MTL::Texture *_msaaTexture = nullptr;
   const int _sampleCount = 4;

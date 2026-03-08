@@ -37,4 +37,5 @@ inline matrix_float4x4 makeYRotation(float angleRadians) {
   m.columns[2].z = c;
   return m;
 }
+inline matrix_float4x4 makeIdentity() { return matrix_identity_float4x4; }
 } // namespace Math
