@@ -1,0 +1,20 @@
+[
+  {
+    "file": "src/Renderer.cpp",
+    "arguments": [
+      "clang++",
+      "-std=c++17",
+      "-I.",
+      "-I./src",
+      "-I/opt/homebrew/include",
+      "-I/opt/homebrew/include/SDL2",
+      "-D_THREAD_SAFE",
+      "-c",
+      "src/Renderer.cpp",
+      "-o",
+      "build/objs/Renderer.o"
+    ],
+    "directory": "/Users/romanroux/Desktop/ISAE-SUPAERO/Césure/Template",
+    "output": "build/objs/Renderer.o"
+  }
+]
