@@ -9,7 +9,40 @@ struct RasterizerData {
     float2 uv;
 };
 
+// (Inigo Quilez)
+float sdBezier(float2 pos, float2 A, float2 B, float2 C) {
+    float2 a = B - A;
+    float2 b = A - 2.0*B + C;
+    float2 c = a * 2.0;
+    float2 d = A - pos;
 
+    float kk = 1.0 / dot(b,b);
+    float kx = kk * dot(a,b);
+    float ky = kk * (2.0*dot(a,a)+dot(d,b)) / 3.0;
+    float kz = kk * dot(d,a);
+
+    float res = 0.0;
+    float p = ky - kx*kx;
+    float p3 = p*p*p;
+    float q = kx*(2.0*kx*kx - 3.0*ky) + kz;
+    float h = q*q + 4.0*p3;
+
+    if(h >= 0.0) { 
+        h = sqrt(h);
+        float2 x = (float2(h, -h) - q) / 2.0;
+        float2 uv = sign(x)*pow(abs(x), float2(1.0/3.0));
+        float t = clamp(uv.x+uv.y-kx, 0.0, 1.0);
+        res = length(d + (c + b*t)*t);
+    } else {
+        float z = sqrt(-p);
+        float v = acos( q/(p*z*2.0) ) / 3.0;
+        float m = cos(v);
+        float n = sin(v)*1.732050808;
+        float3 t = clamp(float3(m+m, -n-m, n-m)*z-kx, 0.0, 1.0);
+        res = min(length(d+(c+b*t.x)*t.x), length(d+(c+b*t.y)*t.y));
+    }
+    return res;
+}
 float map(float3 pos, constant SDFNodeGPU* nodes, int nodeCount) {
     float stack[32];
     int sp = 0;
@@ -43,6 +76,32 @@ float map(float3 pos, constant SDFNodeGPU* nodes, int nodeCount) {
             float2 p2d = float2(length(pos.xz), pos.y);
             float2 d = abs(p2d - node.position.xy) - node.params.xy;
             dist = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+            stack[sp++] = dist;
+        }
+        else if (node.type == SDF_TYPE_BEZIER2D) {
+            float2 p2d = float2(length(pos.xz), pos.y);
+            float2 p0 = node.position.xy;
+            float2 p1 = node.params.xy;
+            float2 p2 = node.params.zw;
+            float thickness = node.position.z;
+            
+            dist = sdBezier(p2d, p0, p1, p2) - thickness;
+            stack[sp++] = dist;
+        }
+        else if (node.type == SDF_OP_UNION) {
+            float d2 = stack[--sp]; float d1 = stack[--sp];
+            dist = min(d1, d2); stack[sp++] = dist;
+        }
+        else if (node.type == SDF_OP_SUBTRACT) {
+            float d2 = stack[--sp]; 
+            float d1 = stack[--sp]; 
+            dist = max(d1, -d2);    
+            stack[sp++] = dist;
+        }
+        else if (node.type == SDF_OP_INTERSECT) {
+            float d2 = stack[--sp];
+            float d1 = stack[--sp];
+            dist = max(d1, d2);
             stack[sp++] = dist;
         }
     }
