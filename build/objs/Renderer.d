@@ -1,4 +1,4 @@
-build/objs/Renderer.o: src/Renderer.cpp src/Renderer.hpp \
+build/objs/Renderer.o: src/Renderer.cpp src/Renderer.hpp src/SDFShared.h \
   metal-cpp/Metal/Metal.hpp metal-cpp/Metal/MTLAccelerationStructure.hpp \
   metal-cpp/Metal/../Foundation/Foundation.hpp \
   metal-cpp/Metal/../Foundation/NSArray.hpp \
@@ -161,8 +161,7 @@ build/objs/Renderer.o: src/Renderer.cpp src/Renderer.hpp \
   /opt/homebrew/include/SDL2/SDL_version.h \
   /opt/homebrew/include/SDL2/SDL_locale.h \
   /opt/homebrew/include/SDL2/SDL_misc.h src/MathUtils.h src/SDFNode.hpp \
-  src/SDFShared.h src/SceneParser.hpp \
-  /opt/homebrew/include/nlohmann/json.hpp \
+  src/SceneParser.hpp /opt/homebrew/include/nlohmann/json.hpp \
   /opt/homebrew/include/nlohmann/adl_serializer.hpp \
   /opt/homebrew/include/nlohmann/detail/abi_macros.hpp \
   /opt/homebrew/include/nlohmann/detail/conversions/from_json.hpp \
@@ -210,6 +209,7 @@ build/objs/Renderer.o: src/Renderer.cpp src/Renderer.hpp \
   /opt/homebrew/include/nlohmann/thirdparty/hedley/hedley_undef.hpp \
   src/Shared.h
 src/Renderer.hpp:
+src/SDFShared.h:
 metal-cpp/Metal/Metal.hpp:
 metal-cpp/Metal/MTLAccelerationStructure.hpp:
 metal-cpp/Metal/../Foundation/Foundation.hpp:
@@ -392,7 +392,6 @@ metal-cpp/QuartzCore/../Foundation/NSTypes.hpp:
 /opt/homebrew/include/SDL2/SDL_misc.h:
 src/MathUtils.h:
 src/SDFNode.hpp:
-src/SDFShared.h:
 src/SceneParser.hpp:
 /opt/homebrew/include/nlohmann/json.hpp:
 /opt/homebrew/include/nlohmann/adl_serializer.hpp:

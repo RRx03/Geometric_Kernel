@@ -92,24 +92,21 @@ void Renderer::buildShaders() {
   defaultLibrary->release();
 }
 void Renderer::buildBuffers() {
-  auto myPart = SceneParser::parseFile("scene.json");
-
-  if (!myPart) {
-    std::cerr << "ERREUR: Impossible de parser scene.json ou type inconnu."
-              << std::endl;
-    return;
-  }
-
-  std::vector<SDFNodeGPU> gpuSDFArray;
-  myPart->flatten(gpuSDFArray);
-  _sdfNodeCount = (int)gpuSDFArray.size();
-
-  _sdfBuffer = _device->newBuffer(gpuSDFArray.data(),
-                                  gpuSDFArray.size() * sizeof(SDFNodeGPU),
-                                  MTL::ResourceStorageModeShared);
-
   _uniformBuffer =
       _device->newBuffer(sizeof(Uniforms), MTL::ResourceStorageModeShared);
+}
+void Renderer::loadGeometry(const std::vector<SDFNodeGPU> &nodes) {
+  _sdfNodeCount = (int)nodes.size();
+
+  if (_sdfBuffer) {
+    _sdfBuffer->release();
+  }
+
+  if (_sdfNodeCount > 0) {
+    _sdfBuffer =
+        _device->newBuffer(nodes.data(), nodes.size() * sizeof(SDFNodeGPU),
+                           MTL::ResourceStorageModeShared);
+  }
 }
 void Renderer::orbit(float dx, float dy) {
   _camAzimuth -= dx * 0.01f;

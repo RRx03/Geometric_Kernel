@@ -1,11 +1,13 @@
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_metal.h>
-#include <iostream>
-
+#include "Mesher.hpp"
+#include "SDFEvaluator.hpp"
+#include "SceneParser.hpp"
 #include "metal-cpp/Foundation/Foundation.hpp"
 #include "metal-cpp/Metal/Metal.hpp"
 #include "metal-cpp/QuartzCore/QuartzCore.hpp"
 #include <Renderer.hpp>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_metal.h>
+#include <iostream>
 #include <simd/simd.h>
 
 int main() {
@@ -37,6 +39,15 @@ int main() {
     SDL_Quit();
     return -1;
   }
+  auto myPartTree = SceneParser::parseFile("scene.json");
+  std::vector<SDFNodeGPU> flattenedTree;
+  if (myPartTree) {
+    myPartTree->flatten(flattenedTree);
+  }
+
+  renderer->loadGeometry(flattenedTree);
+
+  SDFEvaluator solverEvaluator(flattenedTree);
 
   bool running = true;
   SDL_Event event;
@@ -59,10 +70,20 @@ int main() {
       if (event.type == SDL_MOUSEWHEEL) {
         renderer->zoom(event.wheel.y);
       }
-    }
+      if (event.type == SDL_KEYDOWN) {
+        if (event.key.keysym.sym == SDLK_e) {
+          std::cout << ">>> DEBUT DE L'EXPORT STL..." << std::endl;
+          Mesher::generateSTL(solverEvaluator,
+                              simd_make_float3(-3.0f, -5.0f, -3.0f),
+                              simd_make_float3(3.0f, 5.0f, 3.0f), 0.05f,
 
-    renderer->renderFrame();
-    SDL_Delay(10);
+                              "export.stl");
+        }
+      }
+
+      renderer->renderFrame();
+      SDL_Delay(10);
+    }
   }
 
   SDL_DestroyWindow(window);

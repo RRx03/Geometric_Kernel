@@ -114,12 +114,11 @@ public:
     return (int)buffer.size() - 1;
   }
 };
-// --- LES NOUVELLES PRIMITIVES ---
 
 class Bezier2D : public SDFNode {
 public:
-  simd::float2 p0, p1, p2; // Les 3 points de contrôle de la courbe quadratique
-  float thickness;         // L'épaisseur de la paroi
+  simd::float2 p0, p1, p2;
+  float thickness;
 
   Bezier2D(simd::float2 a, simd::float2 b, simd::float2 c, float t)
       : p0(a), p1(b), p2(c), thickness(t) {}
@@ -129,17 +128,13 @@ public:
     gpuNode.type = SDF_TYPE_BEZIER2D;
     gpuNode.leftChildIndex = -1;
     gpuNode.rightChildIndex = -1;
-    // Astuce : On stocke p0.x, p0.y et l'épaisseur dans position
     gpuNode.position = {p0.x, p0.y, thickness};
-    // On stocke p1 et p2 dans params
     gpuNode.params = {p1.x, p1.y, p2.x, p2.y};
 
     buffer.push_back(gpuNode);
     return (int)buffer.size() - 1;
   }
 };
-
-// --- LES NOUVELLES OPÉRATIONS ---
 
 class Subtract : public SDFNode {
 public:

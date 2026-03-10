@@ -1,9 +1,13 @@
 #pragma once
 
+#include "SDFShared.h"
 #include "metal-cpp/Metal/Metal.hpp"
 #include "metal-cpp/QuartzCore/QuartzCore.hpp"
-#include <SDL.h>
+#include <SDL2/SDL.h>
 #include <simd/simd.h>
+#include <vector>
+
+#include "SDFShared.h"
 
 class Renderer {
 public:
@@ -15,6 +19,8 @@ public:
   void orbit(float dx, float dy);
   void pan(float dx, float dy);
   void zoom(float dz);
+
+  void loadGeometry(const std::vector<SDFNodeGPU> &nodes);
 
 private:
   void buildShaders();

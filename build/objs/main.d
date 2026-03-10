@@ -1,53 +1,51 @@
-build/objs/main.o: src/main.cpp /opt/homebrew/include/SDL2/SDL.h \
-  /opt/homebrew/include/SDL2/SDL_main.h \
-  /opt/homebrew/include/SDL2/SDL_stdinc.h \
-  /opt/homebrew/include/SDL2/SDL_config.h \
-  /opt/homebrew/include/SDL2/SDL_platform.h \
-  /opt/homebrew/include/SDL2/begin_code.h \
-  /opt/homebrew/include/SDL2/close_code.h \
-  /opt/homebrew/include/SDL2/SDL_assert.h \
-  /opt/homebrew/include/SDL2/SDL_atomic.h \
-  /opt/homebrew/include/SDL2/SDL_audio.h \
-  /opt/homebrew/include/SDL2/SDL_error.h \
-  /opt/homebrew/include/SDL2/SDL_endian.h \
-  /opt/homebrew/include/SDL2/SDL_mutex.h \
-  /opt/homebrew/include/SDL2/SDL_thread.h \
-  /opt/homebrew/include/SDL2/SDL_rwops.h \
-  /opt/homebrew/include/SDL2/SDL_clipboard.h \
-  /opt/homebrew/include/SDL2/SDL_cpuinfo.h \
-  /opt/homebrew/include/SDL2/SDL_events.h \
-  /opt/homebrew/include/SDL2/SDL_video.h \
-  /opt/homebrew/include/SDL2/SDL_pixels.h \
-  /opt/homebrew/include/SDL2/SDL_rect.h \
-  /opt/homebrew/include/SDL2/SDL_surface.h \
-  /opt/homebrew/include/SDL2/SDL_blendmode.h \
-  /opt/homebrew/include/SDL2/SDL_keyboard.h \
-  /opt/homebrew/include/SDL2/SDL_keycode.h \
-  /opt/homebrew/include/SDL2/SDL_scancode.h \
-  /opt/homebrew/include/SDL2/SDL_mouse.h \
-  /opt/homebrew/include/SDL2/SDL_joystick.h \
-  /opt/homebrew/include/SDL2/SDL_guid.h \
-  /opt/homebrew/include/SDL2/SDL_gamecontroller.h \
-  /opt/homebrew/include/SDL2/SDL_sensor.h \
-  /opt/homebrew/include/SDL2/SDL_quit.h \
-  /opt/homebrew/include/SDL2/SDL_gesture.h \
-  /opt/homebrew/include/SDL2/SDL_touch.h \
-  /opt/homebrew/include/SDL2/SDL_filesystem.h \
-  /opt/homebrew/include/SDL2/SDL_haptic.h \
-  /opt/homebrew/include/SDL2/SDL_hidapi.h \
-  /opt/homebrew/include/SDL2/SDL_hints.h \
-  /opt/homebrew/include/SDL2/SDL_loadso.h \
-  /opt/homebrew/include/SDL2/SDL_log.h \
-  /opt/homebrew/include/SDL2/SDL_messagebox.h \
-  /opt/homebrew/include/SDL2/SDL_metal.h \
-  /opt/homebrew/include/SDL2/SDL_power.h \
-  /opt/homebrew/include/SDL2/SDL_render.h \
-  /opt/homebrew/include/SDL2/SDL_shape.h \
-  /opt/homebrew/include/SDL2/SDL_system.h \
-  /opt/homebrew/include/SDL2/SDL_timer.h \
-  /opt/homebrew/include/SDL2/SDL_version.h \
-  /opt/homebrew/include/SDL2/SDL_locale.h \
-  /opt/homebrew/include/SDL2/SDL_misc.h \
+build/objs/main.o: src/main.cpp src/Mesher.hpp src/SDFEvaluator.hpp \
+  src/SDFShared.h src/SceneParser.hpp src/SDFNode.hpp \
+  /opt/homebrew/include/nlohmann/json.hpp \
+  /opt/homebrew/include/nlohmann/adl_serializer.hpp \
+  /opt/homebrew/include/nlohmann/detail/abi_macros.hpp \
+  /opt/homebrew/include/nlohmann/detail/conversions/from_json.hpp \
+  /opt/homebrew/include/nlohmann/detail/exceptions.hpp \
+  /opt/homebrew/include/nlohmann/detail/value_t.hpp \
+  /opt/homebrew/include/nlohmann/detail/macro_scope.hpp \
+  /opt/homebrew/include/nlohmann/detail/meta/detected.hpp \
+  /opt/homebrew/include/nlohmann/detail/meta/void_t.hpp \
+  /opt/homebrew/include/nlohmann/thirdparty/hedley/hedley.hpp \
+  /opt/homebrew/include/nlohmann/detail/string_escape.hpp \
+  /opt/homebrew/include/nlohmann/detail/input/position_t.hpp \
+  /opt/homebrew/include/nlohmann/detail/meta/cpp_future.hpp \
+  /opt/homebrew/include/nlohmann/detail/meta/type_traits.hpp \
+  /opt/homebrew/include/nlohmann/detail/iterators/iterator_traits.hpp \
+  /opt/homebrew/include/nlohmann/detail/meta/call_std/begin.hpp \
+  /opt/homebrew/include/nlohmann/detail/meta/call_std/end.hpp \
+  /opt/homebrew/include/nlohmann/json_fwd.hpp \
+  /opt/homebrew/include/nlohmann/detail/string_concat.hpp \
+  /opt/homebrew/include/nlohmann/detail/meta/identity_tag.hpp \
+  /opt/homebrew/include/nlohmann/detail/meta/std_fs.hpp \
+  /opt/homebrew/include/nlohmann/detail/conversions/to_json.hpp \
+  /opt/homebrew/include/nlohmann/detail/iterators/iteration_proxy.hpp \
+  /opt/homebrew/include/nlohmann/detail/string_utils.hpp \
+  /opt/homebrew/include/nlohmann/byte_container_with_subtype.hpp \
+  /opt/homebrew/include/nlohmann/detail/hash.hpp \
+  /opt/homebrew/include/nlohmann/detail/input/binary_reader.hpp \
+  /opt/homebrew/include/nlohmann/detail/input/input_adapters.hpp \
+  /opt/homebrew/include/nlohmann/detail/input/json_sax.hpp \
+  /opt/homebrew/include/nlohmann/detail/input/lexer.hpp \
+  /opt/homebrew/include/nlohmann/detail/meta/is_sax.hpp \
+  /opt/homebrew/include/nlohmann/detail/input/parser.hpp \
+  /opt/homebrew/include/nlohmann/detail/iterators/internal_iterator.hpp \
+  /opt/homebrew/include/nlohmann/detail/iterators/primitive_iterator.hpp \
+  /opt/homebrew/include/nlohmann/detail/iterators/iter_impl.hpp \
+  /opt/homebrew/include/nlohmann/detail/iterators/json_reverse_iterator.hpp \
+  /opt/homebrew/include/nlohmann/detail/json_custom_base_class.hpp \
+  /opt/homebrew/include/nlohmann/detail/json_pointer.hpp \
+  /opt/homebrew/include/nlohmann/detail/json_ref.hpp \
+  /opt/homebrew/include/nlohmann/detail/output/binary_writer.hpp \
+  /opt/homebrew/include/nlohmann/detail/output/output_adapters.hpp \
+  /opt/homebrew/include/nlohmann/detail/output/serializer.hpp \
+  /opt/homebrew/include/nlohmann/detail/conversions/to_chars.hpp \
+  /opt/homebrew/include/nlohmann/ordered_map.hpp \
+  /opt/homebrew/include/nlohmann/detail/macro_unscope.hpp \
+  /opt/homebrew/include/nlohmann/thirdparty/hedley/hedley_undef.hpp \
   metal-cpp/Foundation/Foundation.hpp metal-cpp/Foundation/NSArray.hpp \
   metal-cpp/Foundation/NSObject.hpp metal-cpp/Foundation/NSDefines.hpp \
   metal-cpp/Foundation/NSPrivate.hpp metal-cpp/Foundation/NSTypes.hpp \
@@ -154,57 +152,107 @@ build/objs/main.o: src/main.cpp /opt/homebrew/include/SDL2/SDL.h \
   metal-cpp/QuartzCore/CAMetalLayer.hpp \
   metal-cpp/QuartzCore/../Metal/MTLPixelFormat.hpp \
   metal-cpp/QuartzCore/../Metal/MTLResidencySet.hpp \
-  metal-cpp/QuartzCore/../Foundation/NSTypes.hpp src/Renderer.hpp
-/opt/homebrew/include/SDL2/SDL.h:
-/opt/homebrew/include/SDL2/SDL_main.h:
-/opt/homebrew/include/SDL2/SDL_stdinc.h:
-/opt/homebrew/include/SDL2/SDL_config.h:
-/opt/homebrew/include/SDL2/SDL_platform.h:
-/opt/homebrew/include/SDL2/begin_code.h:
-/opt/homebrew/include/SDL2/close_code.h:
-/opt/homebrew/include/SDL2/SDL_assert.h:
-/opt/homebrew/include/SDL2/SDL_atomic.h:
-/opt/homebrew/include/SDL2/SDL_audio.h:
-/opt/homebrew/include/SDL2/SDL_error.h:
-/opt/homebrew/include/SDL2/SDL_endian.h:
-/opt/homebrew/include/SDL2/SDL_mutex.h:
-/opt/homebrew/include/SDL2/SDL_thread.h:
-/opt/homebrew/include/SDL2/SDL_rwops.h:
-/opt/homebrew/include/SDL2/SDL_clipboard.h:
-/opt/homebrew/include/SDL2/SDL_cpuinfo.h:
-/opt/homebrew/include/SDL2/SDL_events.h:
-/opt/homebrew/include/SDL2/SDL_video.h:
-/opt/homebrew/include/SDL2/SDL_pixels.h:
-/opt/homebrew/include/SDL2/SDL_rect.h:
-/opt/homebrew/include/SDL2/SDL_surface.h:
-/opt/homebrew/include/SDL2/SDL_blendmode.h:
-/opt/homebrew/include/SDL2/SDL_keyboard.h:
-/opt/homebrew/include/SDL2/SDL_keycode.h:
-/opt/homebrew/include/SDL2/SDL_scancode.h:
-/opt/homebrew/include/SDL2/SDL_mouse.h:
-/opt/homebrew/include/SDL2/SDL_joystick.h:
-/opt/homebrew/include/SDL2/SDL_guid.h:
-/opt/homebrew/include/SDL2/SDL_gamecontroller.h:
-/opt/homebrew/include/SDL2/SDL_sensor.h:
-/opt/homebrew/include/SDL2/SDL_quit.h:
-/opt/homebrew/include/SDL2/SDL_gesture.h:
-/opt/homebrew/include/SDL2/SDL_touch.h:
-/opt/homebrew/include/SDL2/SDL_filesystem.h:
-/opt/homebrew/include/SDL2/SDL_haptic.h:
-/opt/homebrew/include/SDL2/SDL_hidapi.h:
-/opt/homebrew/include/SDL2/SDL_hints.h:
-/opt/homebrew/include/SDL2/SDL_loadso.h:
-/opt/homebrew/include/SDL2/SDL_log.h:
-/opt/homebrew/include/SDL2/SDL_messagebox.h:
-/opt/homebrew/include/SDL2/SDL_metal.h:
-/opt/homebrew/include/SDL2/SDL_power.h:
-/opt/homebrew/include/SDL2/SDL_render.h:
-/opt/homebrew/include/SDL2/SDL_shape.h:
-/opt/homebrew/include/SDL2/SDL_system.h:
-/opt/homebrew/include/SDL2/SDL_timer.h:
-/opt/homebrew/include/SDL2/SDL_version.h:
-/opt/homebrew/include/SDL2/SDL_locale.h:
-/opt/homebrew/include/SDL2/SDL_misc.h:
+  metal-cpp/QuartzCore/../Foundation/NSTypes.hpp src/Renderer.hpp \
+  /opt/homebrew/include/SDL2/SDL.h /opt/homebrew/include/SDL2/SDL_main.h \
+  /opt/homebrew/include/SDL2/SDL_stdinc.h \
+  /opt/homebrew/include/SDL2/SDL_config.h \
+  /opt/homebrew/include/SDL2/SDL_platform.h \
+  /opt/homebrew/include/SDL2/begin_code.h \
+  /opt/homebrew/include/SDL2/close_code.h \
+  /opt/homebrew/include/SDL2/SDL_assert.h \
+  /opt/homebrew/include/SDL2/SDL_atomic.h \
+  /opt/homebrew/include/SDL2/SDL_audio.h \
+  /opt/homebrew/include/SDL2/SDL_error.h \
+  /opt/homebrew/include/SDL2/SDL_endian.h \
+  /opt/homebrew/include/SDL2/SDL_mutex.h \
+  /opt/homebrew/include/SDL2/SDL_thread.h \
+  /opt/homebrew/include/SDL2/SDL_rwops.h \
+  /opt/homebrew/include/SDL2/SDL_clipboard.h \
+  /opt/homebrew/include/SDL2/SDL_cpuinfo.h \
+  /opt/homebrew/include/SDL2/SDL_events.h \
+  /opt/homebrew/include/SDL2/SDL_video.h \
+  /opt/homebrew/include/SDL2/SDL_pixels.h \
+  /opt/homebrew/include/SDL2/SDL_rect.h \
+  /opt/homebrew/include/SDL2/SDL_surface.h \
+  /opt/homebrew/include/SDL2/SDL_blendmode.h \
+  /opt/homebrew/include/SDL2/SDL_keyboard.h \
+  /opt/homebrew/include/SDL2/SDL_keycode.h \
+  /opt/homebrew/include/SDL2/SDL_scancode.h \
+  /opt/homebrew/include/SDL2/SDL_mouse.h \
+  /opt/homebrew/include/SDL2/SDL_joystick.h \
+  /opt/homebrew/include/SDL2/SDL_guid.h \
+  /opt/homebrew/include/SDL2/SDL_gamecontroller.h \
+  /opt/homebrew/include/SDL2/SDL_sensor.h \
+  /opt/homebrew/include/SDL2/SDL_quit.h \
+  /opt/homebrew/include/SDL2/SDL_gesture.h \
+  /opt/homebrew/include/SDL2/SDL_touch.h \
+  /opt/homebrew/include/SDL2/SDL_filesystem.h \
+  /opt/homebrew/include/SDL2/SDL_haptic.h \
+  /opt/homebrew/include/SDL2/SDL_hidapi.h \
+  /opt/homebrew/include/SDL2/SDL_hints.h \
+  /opt/homebrew/include/SDL2/SDL_loadso.h \
+  /opt/homebrew/include/SDL2/SDL_log.h \
+  /opt/homebrew/include/SDL2/SDL_messagebox.h \
+  /opt/homebrew/include/SDL2/SDL_metal.h \
+  /opt/homebrew/include/SDL2/SDL_power.h \
+  /opt/homebrew/include/SDL2/SDL_render.h \
+  /opt/homebrew/include/SDL2/SDL_shape.h \
+  /opt/homebrew/include/SDL2/SDL_system.h \
+  /opt/homebrew/include/SDL2/SDL_timer.h \
+  /opt/homebrew/include/SDL2/SDL_version.h \
+  /opt/homebrew/include/SDL2/SDL_locale.h \
+  /opt/homebrew/include/SDL2/SDL_misc.h
+src/Mesher.hpp:
+src/SDFEvaluator.hpp:
+src/SDFShared.h:
+src/SceneParser.hpp:
+src/SDFNode.hpp:
+/opt/homebrew/include/nlohmann/json.hpp:
+/opt/homebrew/include/nlohmann/adl_serializer.hpp:
+/opt/homebrew/include/nlohmann/detail/abi_macros.hpp:
+/opt/homebrew/include/nlohmann/detail/conversions/from_json.hpp:
+/opt/homebrew/include/nlohmann/detail/exceptions.hpp:
+/opt/homebrew/include/nlohmann/detail/value_t.hpp:
+/opt/homebrew/include/nlohmann/detail/macro_scope.hpp:
+/opt/homebrew/include/nlohmann/detail/meta/detected.hpp:
+/opt/homebrew/include/nlohmann/detail/meta/void_t.hpp:
+/opt/homebrew/include/nlohmann/thirdparty/hedley/hedley.hpp:
+/opt/homebrew/include/nlohmann/detail/string_escape.hpp:
+/opt/homebrew/include/nlohmann/detail/input/position_t.hpp:
+/opt/homebrew/include/nlohmann/detail/meta/cpp_future.hpp:
+/opt/homebrew/include/nlohmann/detail/meta/type_traits.hpp:
+/opt/homebrew/include/nlohmann/detail/iterators/iterator_traits.hpp:
+/opt/homebrew/include/nlohmann/detail/meta/call_std/begin.hpp:
+/opt/homebrew/include/nlohmann/detail/meta/call_std/end.hpp:
+/opt/homebrew/include/nlohmann/json_fwd.hpp:
+/opt/homebrew/include/nlohmann/detail/string_concat.hpp:
+/opt/homebrew/include/nlohmann/detail/meta/identity_tag.hpp:
+/opt/homebrew/include/nlohmann/detail/meta/std_fs.hpp:
+/opt/homebrew/include/nlohmann/detail/conversions/to_json.hpp:
+/opt/homebrew/include/nlohmann/detail/iterators/iteration_proxy.hpp:
+/opt/homebrew/include/nlohmann/detail/string_utils.hpp:
+/opt/homebrew/include/nlohmann/byte_container_with_subtype.hpp:
+/opt/homebrew/include/nlohmann/detail/hash.hpp:
+/opt/homebrew/include/nlohmann/detail/input/binary_reader.hpp:
+/opt/homebrew/include/nlohmann/detail/input/input_adapters.hpp:
+/opt/homebrew/include/nlohmann/detail/input/json_sax.hpp:
+/opt/homebrew/include/nlohmann/detail/input/lexer.hpp:
+/opt/homebrew/include/nlohmann/detail/meta/is_sax.hpp:
+/opt/homebrew/include/nlohmann/detail/input/parser.hpp:
+/opt/homebrew/include/nlohmann/detail/iterators/internal_iterator.hpp:
+/opt/homebrew/include/nlohmann/detail/iterators/primitive_iterator.hpp:
+/opt/homebrew/include/nlohmann/detail/iterators/iter_impl.hpp:
+/opt/homebrew/include/nlohmann/detail/iterators/json_reverse_iterator.hpp:
+/opt/homebrew/include/nlohmann/detail/json_custom_base_class.hpp:
+/opt/homebrew/include/nlohmann/detail/json_pointer.hpp:
+/opt/homebrew/include/nlohmann/detail/json_ref.hpp:
+/opt/homebrew/include/nlohmann/detail/output/binary_writer.hpp:
+/opt/homebrew/include/nlohmann/detail/output/output_adapters.hpp:
+/opt/homebrew/include/nlohmann/detail/output/serializer.hpp:
+/opt/homebrew/include/nlohmann/detail/conversions/to_chars.hpp:
+/opt/homebrew/include/nlohmann/ordered_map.hpp:
+/opt/homebrew/include/nlohmann/detail/macro_unscope.hpp:
+/opt/homebrew/include/nlohmann/thirdparty/hedley/hedley_undef.hpp:
 metal-cpp/Foundation/Foundation.hpp:
 metal-cpp/Foundation/NSArray.hpp:
 metal-cpp/Foundation/NSObject.hpp:
@@ -338,3 +386,53 @@ metal-cpp/QuartzCore/../Metal/MTLPixelFormat.hpp:
 metal-cpp/QuartzCore/../Metal/MTLResidencySet.hpp:
 metal-cpp/QuartzCore/../Foundation/NSTypes.hpp:
 src/Renderer.hpp:
+/opt/homebrew/include/SDL2/SDL.h:
+/opt/homebrew/include/SDL2/SDL_main.h:
+/opt/homebrew/include/SDL2/SDL_stdinc.h:
+/opt/homebrew/include/SDL2/SDL_config.h:
+/opt/homebrew/include/SDL2/SDL_platform.h:
+/opt/homebrew/include/SDL2/begin_code.h:
+/opt/homebrew/include/SDL2/close_code.h:
+/opt/homebrew/include/SDL2/SDL_assert.h:
+/opt/homebrew/include/SDL2/SDL_atomic.h:
+/opt/homebrew/include/SDL2/SDL_audio.h:
+/opt/homebrew/include/SDL2/SDL_error.h:
+/opt/homebrew/include/SDL2/SDL_endian.h:
+/opt/homebrew/include/SDL2/SDL_mutex.h:
+/opt/homebrew/include/SDL2/SDL_thread.h:
+/opt/homebrew/include/SDL2/SDL_rwops.h:
+/opt/homebrew/include/SDL2/SDL_clipboard.h:
+/opt/homebrew/include/SDL2/SDL_cpuinfo.h:
+/opt/homebrew/include/SDL2/SDL_events.h:
+/opt/homebrew/include/SDL2/SDL_video.h:
+/opt/homebrew/include/SDL2/SDL_pixels.h:
+/opt/homebrew/include/SDL2/SDL_rect.h:
+/opt/homebrew/include/SDL2/SDL_surface.h:
+/opt/homebrew/include/SDL2/SDL_blendmode.h:
+/opt/homebrew/include/SDL2/SDL_keyboard.h:
+/opt/homebrew/include/SDL2/SDL_keycode.h:
+/opt/homebrew/include/SDL2/SDL_scancode.h:
+/opt/homebrew/include/SDL2/SDL_mouse.h:
+/opt/homebrew/include/SDL2/SDL_joystick.h:
+/opt/homebrew/include/SDL2/SDL_guid.h:
+/opt/homebrew/include/SDL2/SDL_gamecontroller.h:
+/opt/homebrew/include/SDL2/SDL_sensor.h:
+/opt/homebrew/include/SDL2/SDL_quit.h:
+/opt/homebrew/include/SDL2/SDL_gesture.h:
+/opt/homebrew/include/SDL2/SDL_touch.h:
+/opt/homebrew/include/SDL2/SDL_filesystem.h:
+/opt/homebrew/include/SDL2/SDL_haptic.h:
+/opt/homebrew/include/SDL2/SDL_hidapi.h:
+/opt/homebrew/include/SDL2/SDL_hints.h:
+/opt/homebrew/include/SDL2/SDL_loadso.h:
+/opt/homebrew/include/SDL2/SDL_log.h:
+/opt/homebrew/include/SDL2/SDL_messagebox.h:
+/opt/homebrew/include/SDL2/SDL_metal.h:
+/opt/homebrew/include/SDL2/SDL_power.h:
+/opt/homebrew/include/SDL2/SDL_render.h:
+/opt/homebrew/include/SDL2/SDL_shape.h:
+/opt/homebrew/include/SDL2/SDL_system.h:
+/opt/homebrew/include/SDL2/SDL_timer.h:
+/opt/homebrew/include/SDL2/SDL_version.h:
+/opt/homebrew/include/SDL2/SDL_locale.h:
+/opt/homebrew/include/SDL2/SDL_misc.h:
