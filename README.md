@@ -9,7 +9,11 @@ then : make run
 
 Overview of the current version :
 
-https://github.com/user-attachments/assets/325a1199-f630-4936-a09a-2076040ce13d
+
+
+https://github.com/user-attachments/assets/99ba26b9-0c10-4fd8-80bd-fbef0b5005da
+
+
 
 Améliorations à venir :
 
