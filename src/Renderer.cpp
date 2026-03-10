@@ -81,13 +81,14 @@ void Renderer::buildShaders() {
   pipeDesc->setRasterSampleCount(_sampleCount);
 
   _renderPSO = _device->newRenderPipelineState(pipeDesc, &error);
-  if (!_renderPSO)
+  if (!_renderPSO) {
     std::cerr << "Erreur PSO Graphique: "
               << error->localizedDescription()->utf8String() << std::endl;
+    throw std::runtime_error("Échec création du pipeline Metal");
+  }
 
   vertexFn->release();
   fragFn->release();
-
   pipeDesc->release();
   defaultLibrary->release();
 }

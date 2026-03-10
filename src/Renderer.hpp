@@ -7,8 +7,6 @@
 #include <simd/simd.h>
 #include <vector>
 
-#include "SDFShared.h"
-
 class Renderer {
 public:
   Renderer(SDL_Window *window);
@@ -27,6 +25,7 @@ private:
   void buildBuffers();
   void updateUniforms();
 
+  // Metal objects
   MTL::Device *_device = nullptr;
   MTL::CommandQueue *_commandQueue = nullptr;
   CA::MetalLayer *_layer = nullptr;
@@ -36,19 +35,23 @@ private:
   MTL::DepthStencilState *_depthStencilState = nullptr;
 
   MTL::Buffer *_vertexBuffer = nullptr;
-  MTL::Buffer *_uniformBuffer;
+  MTL::Buffer *_uniformBuffer = nullptr;
 
+  // SDF data
   MTL::Buffer *_sdfBuffer = nullptr;
   int _sdfNodeCount = 0;
 
-  float _angle;
-  int _width, _height;
+  // Viewport
+  int _width = 800;
+  int _height = 600;
 
+  // Camera (orbite sphérique)
   float _camDistance = 5.0f;
   float _camAzimuth = 0.0f;
   float _camElevation = 0.0f;
   simd::float3 _camTarget = {0.0f, 0.0f, 0.0f};
 
+  // MSAA
   MTL::Texture *_msaaTexture = nullptr;
   const int _sampleCount = 4;
 };
