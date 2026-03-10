@@ -21,3 +21,4 @@ Améliorations à venir :
 - Opérations CSG limitées à des arbres binaires : Actuellement, Union, Subtract, et Intersect prennent exactement 2 enfants (left/right). Permettre des opérations n-aires (ex: Union de 3+ enfants) pour plus de flexibilité dans la construction d'arbres SDF. C'est verbeux et profond. Pour être solver-friendly, il serait préférable d'accepter un tableau children :
   json{"type": "Union", "children": [S1, S2, S3, S4, S5]}
 - Augmenter la résolution d'export, ou permettre a l'utilisateur de le choisir, pour des maillages plus détaillés. Actuellement, la résolution est fixe à 64^3, ce qui peut être insuffisant pour des SDF complexes.
+- Rendre la fenetre resizable
