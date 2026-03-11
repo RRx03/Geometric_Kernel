@@ -36,14 +36,16 @@ $(OBJS_FOLDER)/%.o: $(SRC_FOLDER)/%.cpp
 $(METALLIB): shaders/shader.metal
 	@echo "Compilation des Shaders..."
 	@mkdir -p $(BUILD_DIR)
-	xcrun -sdk macosx metal -c shaders/shader.metal -o $(BUILD_DIR)/shader.air
+	xcrun -sdk macosx metal -std=macos-metal2.0 -c shaders/shader.metal -o $(BUILD_DIR)/shader.air
 	xcrun -sdk macosx metallib $(BUILD_DIR)/shader.air -o $(METALLIB)
 	@rm $(BUILD_DIR)/shader.air 
 	@echo "Shaders compilés dans $(METALLIB)"
 
 -include $(DEPS)
 init: 
-	brew install nlohmann-json
+	brew install nlohmann-json sdl2
+	xcodebuild -downloadComponent MetalToolchain
+	
 clean:
 	rm -rf $(BUILD_DIR)
 	@echo "Dossier build nettoyé."
