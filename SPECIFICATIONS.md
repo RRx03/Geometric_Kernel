@@ -19,6 +19,7 @@
 ```
 problem.json
 ├── meta                  (type, unités SI)
+├── frame                 (auto ou manual : origine + axes)
 ├── materials             (propriétés mécaniques/thermiques)
 ├── named_points          (points nommés : fixes, variables, mobiles)
 ├── boundary_conditions   (surfaces + distributions physiques + anchors)
@@ -468,9 +469,75 @@ Il ne fait que visualiser. Le solveur est autonome.
 
 ---
 
-## 9. Recentrage Automatique
+## 9. Frame — Recentrage Automatique ou Manuel
 
-Le solveur déduit le repère à partir des anchors (disques concentriques → axe commun), construit une matrice de transformation, et travaille dans le repère recentré.
+### 9.1 Deux modes
+
+L'utilisateur choisit comment le solveur détermine l'origine et les axes
+du repère de travail.
+
+**Mode `auto` (défaut) :**
+Le solveur déduit l'origine et l'axe à partir des anchors et des
+géométries BC (disques concentriques → axe commun, centre du premier
+disque d'entrée → origine).
+
+**Mode `manual` (Set Origin) :**
+L'utilisateur clique "Set Origin" dans le front-end, choisit un point
+comme origine, et oriente les axes en les faisant tourner. Le front-end
+écrit les coordonnées dans le JSON.
+
+### 9.2 Syntaxe JSON
+
+Mode auto (rien à spécifier, ou explicitement) :
+```json
+"frame": {
+    "mode": "auto"
+}
+```
+
+Mode manual :
+```json
+"frame": {
+    "mode": "manual",
+    "origin": [0.1, 0.0, 0.0],
+    "axis":   [0, 0, 1],
+    "up":     [0, 1, 0]
+}
+```
+
+- `origin` : point 3D choisi par l'utilisateur comme centre du repère
+- `axis` : vecteur direction de l'axe principal (ex: axe de révolution)
+- `up` : vecteur direction de l'axe secondaire (doit être perpendiculaire à `axis`)
+- `right` : déduit automatiquement par `cross(axis, up)` — jamais spécifié par l'utilisateur
+
+### 9.3 Comportement du solveur
+
+En mode `auto` :
+1. Identifier l'axe de symétrie à partir des anchors (`concentric_with` → axe commun)
+2. Déterminer l'origine : centre du disque d'entrée, ou point nommé marqué `"type": "origin"`
+3. Construire la matrice de transformation
+4. Travailler dans le repère recentré
+
+En mode `manual` :
+1. Lire directement `origin`, `axis`, `up` depuis le JSON
+2. Calculer `right = cross(axis, up)`
+3. Normaliser les vecteurs
+4. Travailler dans le repère défini par l'utilisateur
+
+### 9.4 Struct C++
+
+```cpp
+struct FrameConfig {
+    std::string mode;  // "auto" ou "manual"
+    // Mode manual uniquement :
+    std::array<float, 3> origin = {0, 0, 0};
+    std::array<float, 3> axis   = {0, 0, 1};
+    std::array<float, 3> up     = {0, 1, 0};
+};
+```
+
+Le champ `frame` est dans `ProblemDefinition`. Si absent du JSON,
+le mode `auto` est utilisé par défaut.
 
 ---
 
