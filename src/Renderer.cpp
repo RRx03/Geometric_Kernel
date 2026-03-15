@@ -117,7 +117,7 @@ void Renderer::orbit(float dx, float dy) {
 
 void Renderer::pan(float dx, float dy) {
   // Pan speed proportional to camera distance (slower when close)
-  float panSpeed = _camDistance * 0.003f;
+  float panSpeed = _camDistance * 0.003f; // était 0.01f fixe
   _camTarget.x -=
       cos(_camAzimuth) * dx * panSpeed + sin(_camAzimuth) * dy * panSpeed;
   _camTarget.y += dy * panSpeed;
@@ -126,10 +126,9 @@ void Renderer::pan(float dx, float dy) {
 }
 
 void Renderer::zoom(float dz) {
-  // Zoom proportional to distance (faster when far, slower when close)
-  float zoomSpeed = _camDistance * 0.15f;
+  float zoomSpeed = _camDistance * 0.15f; // proportionnel à la distance
   _camDistance -= dz * zoomSpeed;
-  _camDistance = std::max(0.001f, _camDistance); // Allow very close zoom (1mm)
+  _camDistance = std::max(0.001f, _camDistance); // était 0.5f
 }
 void Renderer::updateUniforms() {
   Uniforms u;

@@ -8,9 +8,57 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_metal.h>
 #include <atomic>
+#include <fstream>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <simd/simd.h>
 #include <thread>
+
+// ── Auto-detect bounding box from scene JSON ──
+// Searches for a Box node and uses its bounds, or falls back to default
+static void detectBoundingBox(const std::string &sceneFile, simd::float3 &bbMin,
+                              simd::float3 &bbMax) {
+  try {
+    std::ifstream f(sceneFile);
+    if (!f.is_open())
+      return;
+    auto root = nlohmann::json::parse(f);
+
+    // Recursive search for Box nodes
+    std::function<bool(const nlohmann::json &)> findBox =
+        [&](const nlohmann::json &j) -> bool {
+      if (!j.is_object())
+        return false;
+      if (j.contains("type") && j["type"] == "Box" && j.contains("bounds")) {
+        float bx = j["bounds"][0].get<float>();
+        float by = j["bounds"][1].get<float>();
+        float bz = j["bounds"][2].get<float>();
+        float px = 0, py = 0, pz = 0;
+        if (j.contains("position")) {
+          px = j["position"][0].get<float>();
+          py = j["position"][1].get<float>();
+          pz = j["position"][2].get<float>();
+        }
+        // Add margin
+        float margin = 0.01f;
+        bbMin = simd_make_float3(px - bx - margin, py - by - margin,
+                                 pz - bz - margin);
+        bbMax = simd_make_float3(px + bx + margin, py + by + margin,
+                                 pz + bz + margin);
+        return true;
+      }
+      for (auto &[key, val] : j.items()) {
+        if (findBox(val))
+          return true;
+      }
+      return false;
+    };
+
+    findBox(root);
+  } catch (...) {
+    // Keep defaults
+  }
+}
 
 int main() {
   if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -57,10 +105,16 @@ int main() {
 
   std::atomic<bool> exportInProgress{false};
 
-  // TODO: Calculer automatiquement la Bounding Box en échantillonnant
-  //       le SDF sur une grille grossière.
+  // ── Auto bounding box from scene ──
   simd::float3 bbMin = simd_make_float3(-3.0f, -3.0f, -3.0f);
   simd::float3 bbMax = simd_make_float3(3.0f, 3.0f, 3.0f);
+  detectBoundingBox("scene.json", bbMin, bbMax);
+
+  float bbSize = simd_length(bbMax - bbMin);
+  std::cout << "Bounding box: [" << bbMin.x << "," << bbMin.y << "," << bbMin.z
+            << "] → [" << bbMax.x << "," << bbMax.y << "," << bbMax.z << "]"
+            << std::endl;
+  std::cout << "Taille diag: " << bbSize * 1000.0f << " mm" << std::endl;
 
   constexpr float STL_EXPORT_SCALE = 1000.0f;
 
@@ -100,13 +154,13 @@ int main() {
         float res = 0.0f;
         std::string filename;
 
-        // E = standard (res = 0.02m = 20mm/voxel)
-        // H = haute qualité (res = 0.005m = 5mm/voxel)
+        // E = standard (~100 voxels along longest axis)
+        // H = haute qualité (~300 voxels along longest axis)
         if (event.key.keysym.sym == SDLK_e) {
-          res = 0.02f;
+          res = bbSize / 100.0f;
           filename = "export.stl";
         } else if (event.key.keysym.sym == SDLK_h) {
-          res = 0.005f;
+          res = bbSize / 300.0f;
           filename = "export_hq.stl";
         }
 
