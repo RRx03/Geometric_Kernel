@@ -116,7 +116,8 @@ void Renderer::orbit(float dx, float dy) {
 }
 
 void Renderer::pan(float dx, float dy) {
-  float panSpeed = 0.01f;
+  // Pan speed proportional to camera distance (slower when close)
+  float panSpeed = _camDistance * 0.003f;
   _camTarget.x -=
       cos(_camAzimuth) * dx * panSpeed + sin(_camAzimuth) * dy * panSpeed;
   _camTarget.y += dy * panSpeed;
@@ -125,8 +126,10 @@ void Renderer::pan(float dx, float dy) {
 }
 
 void Renderer::zoom(float dz) {
-  _camDistance -= dz * 0.5f;
-  _camDistance = std::max(0.5f, _camDistance);
+  // Zoom proportional to distance (faster when far, slower when close)
+  float zoomSpeed = _camDistance * 0.15f;
+  _camDistance -= dz * zoomSpeed;
+  _camDistance = std::max(0.001f, _camDistance); // Allow very close zoom (1mm)
 }
 void Renderer::updateUniforms() {
   Uniforms u;
@@ -184,54 +187,52 @@ void Renderer::resize(int width, int height) {
 }
 
 void Renderer::renderFrame() {
+  if (!_renderPSO)
+    return;
+  NS::AutoreleasePool *pool = NS::AutoreleasePool::alloc()->init();
+
+  CA::MetalDrawable *drawable = _layer->nextDrawable();
+  if (!drawable) {
+    pool->release();
+    return;
+  }
 
   updateUniforms();
 
-  NS::AutoreleasePool *pool = NS::AutoreleasePool::alloc()->init();
-  CA::MetalDrawable *drawable = _layer->nextDrawable();
+  MTL::RenderPassDescriptor *rpd = MTL::RenderPassDescriptor::alloc()->init();
 
-  if (drawable) {
+  rpd->colorAttachments()->object(0)->setTexture(_msaaTexture);
+  rpd->colorAttachments()->object(0)->setResolveTexture(drawable->texture());
+  rpd->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
+  rpd->colorAttachments()->object(0)->setStoreAction(
+      MTL::StoreActionMultisampleResolve);
+  rpd->colorAttachments()->object(0)->setClearColor(
+      MTL::ClearColor(0.15, 0.15, 0.15, 1.0));
 
-    MTL::CommandBuffer *buffer = _commandQueue->commandBuffer();
+  rpd->depthAttachment()->setTexture(_depthTexture);
+  rpd->depthAttachment()->setLoadAction(MTL::LoadActionClear);
+  rpd->depthAttachment()->setStoreAction(MTL::StoreActionDontCare);
+  rpd->depthAttachment()->setClearDepth(1.0);
 
-    MTL::RenderPassDescriptor *pass =
-        MTL::RenderPassDescriptor::renderPassDescriptor();
-    MTL::RenderPassColorAttachmentDescriptor *colorAttachment =
-        pass->colorAttachments()->object(0);
-    colorAttachment->setTexture(_msaaTexture);
-    colorAttachment->setResolveTexture(drawable->texture());
+  MTL::CommandBuffer *cmd = _commandQueue->commandBuffer();
+  MTL::RenderCommandEncoder *enc = cmd->renderCommandEncoder(rpd);
+  enc->setRenderPipelineState(_renderPSO);
+  enc->setDepthStencilState(_depthStencilState);
 
-    colorAttachment->setLoadAction(MTL::LoadActionClear);
-    colorAttachment->setClearColor(MTL::ClearColor::Make(0.1, 0.1, 0.1, 1));
+  enc->setFragmentBuffer(_uniformBuffer, 0, 1);
 
-    colorAttachment->setStoreAction(MTL::StoreActionMultisampleResolve);
-
-    MTL::RenderPassDepthAttachmentDescriptor *depthAttachment =
-        pass->depthAttachment();
-    depthAttachment->setTexture(_depthTexture);
-    depthAttachment->setLoadAction(MTL::LoadActionClear);
-    depthAttachment->setClearDepth(1.0);
-    depthAttachment->setStoreAction(MTL::StoreActionDontCare);
-
-    MTL::RenderCommandEncoder *renderEncoder =
-        buffer->renderCommandEncoder(pass);
-
-    renderEncoder->setRenderPipelineState(_renderPSO);
-    renderEncoder->setDepthStencilState(_depthStencilState);
-
-    renderEncoder->setFragmentBuffer(_uniformBuffer, 0, 1);
-
-    renderEncoder->setFragmentBuffer(_sdfBuffer, 0, 2);
-    renderEncoder->setFragmentBytes(&_sdfNodeCount, sizeof(int), 3);
-
-    renderEncoder->drawPrimitives(MTL::PrimitiveTypeTriangleStrip,
-                                  NS::UInteger(0), NS::UInteger(4));
-
-    renderEncoder->endEncoding();
-
-    buffer->presentDrawable(drawable);
-    buffer->commit();
+  if (_sdfBuffer) {
+    enc->setFragmentBuffer(_sdfBuffer, 0, 2);
+    enc->setFragmentBytes(&_sdfNodeCount, sizeof(int), 3);
   }
 
+  enc->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, (NS::UInteger)0,
+                      (NS::UInteger)4);
+  enc->endEncoding();
+
+  cmd->presentDrawable(drawable);
+  cmd->commit();
+
+  rpd->release();
   pool->release();
 }

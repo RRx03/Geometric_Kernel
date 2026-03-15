@@ -1,7 +1,6 @@
 #include <metal_stdlib>
 using namespace metal;
 
-// ═══ Shared struct (must match SDFShared.h) ═══
 struct SDFNodeGPU {
     int type;
     int leftChildIndex;
@@ -15,11 +14,16 @@ struct SDFNodeGPU {
     float _pad3;
 };
 
+// ═══ MUST match Shared.h exactly (with padding and field order) ═══
 struct Uniforms {
     float3 camPos;
+    float padding1;
     float3 camForward;
-    float3 camUp;
+    float padding2;
     float3 camRight;
+    float padding3;
+    float3 camUp;
+    float padding4;
 };
 
 struct RasterizerData {
@@ -27,7 +31,6 @@ struct RasterizerData {
     float2 uv;
 };
 
-// ═══ SDF Type constants ═══
 constant int SDF_DATA_CARRIER = -1;
 constant int SDF_TYPE_SPHERE = 0;
 constant int SDF_TYPE_BOX = 1;
@@ -41,196 +44,107 @@ constant int SDF_OP_SUBTRACT = 11;
 constant int SDF_OP_SMOOTH_UNION = 12;
 constant int SDF_OP_INTERSECT = 13;
 
-// ═══ Quadratic Bézier unsigned distance (IQ's method) ═══
-float sdBezierQuadratic(float2 pos, float2 A, float2 B, float2 C) {
-    float2 a = B - A;
-    float2 b = A - 2.0 * B + C;
-    float2 c = a * 2.0;
-    float2 d = A - pos;
-    float kk = 1.0 / max(dot(b, b), 1e-10);
-    float kx = kk * dot(a, b);
-    float ky = kk * (2.0 * dot(a, a) + dot(d, b)) / 3.0;
-    float kz = kk * dot(d, a);
-    float p = ky - kx * kx;
-    float p3 = p * p * p;
-    float q = kx * (2.0 * kx * kx - 3.0 * ky) + kz;
-    float h = q * q + 4.0 * p3;
-    float res = 0.0;
-    if (h >= 0.0) {
-        h = sqrt(h);
-        float2 x = (float2(h, -h) - float2(q, q)) / 2.0;
-        float2 uv = float2(sign(x.x) * pow(abs(x.x), 1.0/3.0),
-                           sign(x.y) * pow(abs(x.y), 1.0/3.0));
-        float t = clamp(uv.x + uv.y - kx, 0.0, 1.0);
-        res = length(d + (c + b * t) * t);
-    } else {
-        float z = sqrt(-p);
-        float v = acos(clamp(q / (p * z * 2.0), -1.0, 1.0)) / 3.0;
-        float m = cos(v);
-        float n = sin(v) * 1.732050808;
-        float t1 = clamp(-(m + n) * z - kx, 0.0, 1.0);
-        float t2 = clamp((m - n) * z * 0.5 - kx, 0.0, 1.0);
-        float d1 = length_squared(d + (c + b * t1) * t1);
-        float d2 = length_squared(d + (c + b * t2) * t2);
-        res = sqrt(min(d1, d2));
-    }
-    return res;
+float2 evalQuad(float2 A, float2 B, float2 C, float t) {
+    float u = 1.0 - t;
+    return u * u * A + 2.0 * u * t * B + t * t * C;
 }
 
-// ═══ Quadratic Bézier with r_curve output ═══
-// Returns unsigned distance and writes r coordinate of closest curve point
 float sdBezierQuadraticWithR(float2 pos, float2 A, float2 B, float2 C,
                               thread float &rCurve) {
-    float2 a = B - A;
-    float2 b = A - 2.0 * B + C;
-    float2 c = a * 2.0;
-    float2 d = A - pos;
-    float kk = 1.0 / max(dot(b, b), 1e-10);
-    float kx = kk * dot(a, b);
-    float ky = kk * (2.0 * dot(a, a) + dot(d, b)) / 3.0;
-    float kz = kk * dot(d, a);
-    float p = ky - kx * kx;
-    float p3 = p * p * p;
-    float q = kx * (2.0 * kx * kx - 3.0 * ky) + kz;
-    float h = q * q + 4.0 * p3;
-    float res = 0.0;
     float bestT = 0.0;
-    if (h >= 0.0) {
-        h = sqrt(h);
-        float2 x = (float2(h, -h) - float2(q, q)) / 2.0;
-        float2 uv = float2(sign(x.x) * pow(abs(x.x), 1.0/3.0),
-                           sign(x.y) * pow(abs(x.y), 1.0/3.0));
-        bestT = clamp(uv.x + uv.y - kx, 0.0, 1.0);
-        res = length(d + (c + b * bestT) * bestT);
-    } else {
-        float z = sqrt(-p);
-        float v = acos(clamp(q / (p * z * 2.0), -1.0, 1.0)) / 3.0;
-        float m = cos(v);
-        float n = sin(v) * 1.732050808;
-        float t1 = clamp(-(m + n) * z - kx, 0.0, 1.0);
-        float t2 = clamp((m - n) * z * 0.5 - kx, 0.0, 1.0);
-        float d1 = length_squared(d + (c + b * t1) * t1);
-        float d2 = length_squared(d + (c + b * t2) * t2);
-        if (d1 < d2) { bestT = t1; res = sqrt(d1); }
-        else         { bestT = t2; res = sqrt(d2); }
+    float bestDist = 1e10;
+    for (int j = 0; j <= 8; j++) {
+        float t = float(j) / 8.0;
+        float d = length(pos - evalQuad(A, B, C, t));
+        if (d < bestDist) { bestDist = d; bestT = t; }
     }
-    float2 curvePoint = A + (c + b * bestT) * bestT;
-    rCurve = curvePoint.x;
-    return res;
+    float lo = max(0.0, bestT - 0.125);
+    float hi = min(1.0, bestT + 0.125);
+    for (int iter = 0; iter < 20; iter++) {
+        float m1 = lo + (hi - lo) / 3.0;
+        float m2 = hi - (hi - lo) / 3.0;
+        if (length(pos - evalQuad(A, B, C, m1)) < length(pos - evalQuad(A, B, C, m2))) hi = m2; else lo = m1;
+    }
+    bestT = (lo + hi) * 0.5;
+    float2 closestPt = evalQuad(A, B, C, bestT);
+    rCurve = closestPt.x;
+    return length(pos - closestPt);
 }
 
-// ═══ Cubic Bézier (subdivision + ternary search) ═══
+float sdBezierQuadratic(float2 pos, float2 A, float2 B, float2 C) {
+    float rC;
+    return sdBezierQuadraticWithR(pos, A, B, C, rC);
+}
+
 float2 evalCubic(float2 p0, float2 p1, float2 p2, float2 p3, float t) {
     float u = 1.0 - t;
     return u*u*u*p0 + 3.0*u*u*t*p1 + 3.0*u*t*t*p2 + t*t*t*p3;
 }
 
 float sdBezierCubic(float2 pos, float2 p0, float2 p1, float2 p2, float2 p3) {
-    constexpr int N = 16;
     float minDist = 1e10;
     float2 prev = p0;
-    for (int i = 1; i <= N; i++) {
-        float t = float(i) / float(N);
+    for (int i = 1; i <= 16; i++) {
+        float t = float(i) / 16.0;
         float2 curr = evalCubic(p0, p1, p2, p3, t);
         float2 seg = curr - prev;
         float segLen2 = dot(seg, seg);
-        float proj = 0.0;
-        if (segLen2 > 1e-10)
-            proj = clamp(dot(pos - prev, seg) / segLen2, 0.0, 1.0);
-        float2 closest = prev + proj * seg;
-        minDist = min(minDist, length(pos - closest));
+        float proj = (segLen2 > 1e-10) ? clamp(dot(pos - prev, seg) / segLen2, 0.0, 1.0) : 0.0;
+        minDist = min(minDist, length(pos - (prev + proj * seg)));
         prev = curr;
     }
     float lo = 0.0, hi = 1.0;
     for (int iter = 0; iter < 24; iter++) {
         float m1 = lo + (hi - lo) / 3.0;
         float m2 = hi - (hi - lo) / 3.0;
-        float d1 = length(pos - evalCubic(p0, p1, p2, p3, m1));
-        float d2 = length(pos - evalCubic(p0, p1, p2, p3, m2));
-        if (d1 < d2) hi = m2; else lo = m1;
+        if (length(pos - evalCubic(p0, p1, p2, p3, m1)) <
+            length(pos - evalCubic(p0, p1, p2, p3, m2))) hi = m2; else lo = m1;
     }
-    float tBest = (lo + hi) * 0.5;
-    return min(minDist, length(pos - evalCubic(p0, p1, p2, p3, tBest)));
+    return min(minDist, length(pos - evalCubic(p0, p1, p2, p3, (lo+hi)*0.5)));
 }
 
-// ═══ CompositeSpline2D — Signed distance to N-point profile ═══
 float sdCompositeSpline2D(float2 p2d, constant SDFNodeGPU* nodes,
                           int headerIdx, int N, float thickness) {
-    // Unpack points from DATA_CARRIER nodes (3 points per carrier)
     float2 pts[64];
     int ptIdx = 0;
-    int carrierIdx = headerIdx + 1;
+    int ci = headerIdx + 1;
     int maxCarriers = (N + 2) / 3;
-
     for (int c = 0; c < maxCarriers && ptIdx < N; c++) {
-        SDFNodeGPU dc = nodes[carrierIdx + c];
+        SDFNodeGPU dc = nodes[ci + c];
         if (ptIdx < N) pts[ptIdx++] = float2(dc.position.x, dc.position.y);
         if (ptIdx < N) pts[ptIdx++] = float2(dc.params.x, dc.params.y);
         if (ptIdx < N) pts[ptIdx++] = float2(dc.params.z, dc.params.w);
     }
-
-    if (ptIdx < 2) return 1e10;
     N = ptIdx;
+    if (N < 2) return 1e10;
 
-    // Find minimum distance across all B-spline segments
     float minDist = 1e10;
-    float rCurveAtClosest = 0.0;
+    float rAtClosest = 0.0;
 
     if (N == 2) {
-        float2 mid = (pts[0] + pts[1]) * 0.5;
         float rC;
-        minDist = sdBezierQuadraticWithR(p2d, pts[0], mid, pts[1], rC);
-        rCurveAtClosest = rC;
+        float d = sdBezierQuadraticWithR(p2d, pts[0], (pts[0]+pts[1])*0.5, pts[1], rC);
+        if (d < minDist) { minDist = d; rAtClosest = rC; }
     } else if (N == 3) {
         float rC;
-        minDist = sdBezierQuadraticWithR(p2d, pts[0], pts[1], pts[2], rC);
-        rCurveAtClosest = rC;
+        float d = sdBezierQuadraticWithR(p2d, pts[0], pts[1], pts[2], rC);
+        if (d < minDist) { minDist = d; rAtClosest = rC; }
     } else {
-        int numSeg = N - 2;
-
-        // First segment
-        {
-            float2 A = pts[0];
-            float2 B = pts[1];
-            float2 C = (pts[1] + pts[2]) * 0.5;
-            float rC;
-            float d = sdBezierQuadraticWithR(p2d, A, B, C, rC);
-            if (d < minDist) { minDist = d; rCurveAtClosest = rC; }
+        { float rC; float d = sdBezierQuadraticWithR(p2d, pts[0], pts[1], (pts[1]+pts[2])*0.5, rC);
+          if (d < minDist) { minDist = d; rAtClosest = rC; } }
+        for (int s = 1; s < N - 3; s++) {
+            float rC; float d = sdBezierQuadraticWithR(p2d, (pts[s]+pts[s+1])*0.5, pts[s+1], (pts[s+1]+pts[s+2])*0.5, rC);
+            if (d < minDist) { minDist = d; rAtClosest = rC; }
         }
-
-        // Middle segments
-        for (int s = 1; s < numSeg - 1; s++) {
-            float2 A = (pts[s] + pts[s+1]) * 0.5;
-            float2 B = pts[s+1];
-            float2 C = (pts[s+1] + pts[s+2]) * 0.5;
-            float rC;
-            float d = sdBezierQuadraticWithR(p2d, A, B, C, rC);
-            if (d < minDist) { minDist = d; rCurveAtClosest = rC; }
-        }
-
-        // Last segment
-        {
-            float2 A = (pts[N-3] + pts[N-2]) * 0.5;
-            float2 B = pts[N-2];
-            float2 C = pts[N-1];
-            float rC;
-            float d = sdBezierQuadraticWithR(p2d, A, B, C, rC);
-            if (d < minDist) { minDist = d; rCurveAtClosest = rC; }
-        }
+        { float rC; float d = sdBezierQuadraticWithR(p2d, (pts[N-3]+pts[N-2])*0.5, pts[N-2], pts[N-1], rC);
+          if (d < minDist) { minDist = d; rAtClosest = rC; } }
     }
 
-    // Determine sign: r_point < r_curve → inside (negative)
-    float sgn = (p2d.x < rCurveAtClosest) ? -1.0 : 1.0;
-
-    if (thickness > 1e-6) {
-        // Tube mode
-        return minDist - thickness;
-    }
-    // Half-plane signed mode
+    float sgn = (p2d.x < rAtClosest) ? -1.0 : 1.0;
+    if (thickness > 1e-6) return minDist - thickness;
     return sgn * minDist;
 }
 
-// ═══ Stack Machine SDF ═══
 float map(float3 pos, constant SDFNodeGPU* nodes, int nodeCount) {
     float stack[64];
     int sp = 0;
@@ -269,7 +183,6 @@ float map(float3 pos, constant SDFNodeGPU* nodes, int nodeCount) {
             int N = int(node.params.x);
             float thickness = node.params.y;
             stack[sp++] = sdCompositeSpline2D(p2d, nodes, i, N, thickness);
-            // Skip DATA_CARRIER nodes
             int numCarriers = (N + 2) / 3;
             i += numCarriers;
         }
@@ -292,7 +205,7 @@ float map(float3 pos, constant SDFNodeGPU* nodes, int nodeCount) {
             stack[sp++] = max(d1, d2);
         }
     }
-    return stack[0];
+    return (sp >= 1) ? stack[0] : 1e10;
 }
 
 vertex RasterizerData vertex_main(uint vertexID [[vertex_id]]) {

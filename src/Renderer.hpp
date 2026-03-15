@@ -46,9 +46,9 @@ private:
   int _height = 600;
 
   // Camera (orbite sphérique)
-  float _camDistance = 5.0f;
-  float _camAzimuth = 0.0f;
-  float _camElevation = 0.0f;
+  float _camDistance = 0.5f;  // Start close for SI-scale parts (metres)
+  float _camAzimuth = 0.5f;   // Slight angle so we see 3D
+  float _camElevation = 0.3f; // Slight elevation
   simd::float3 _camTarget = {0.0f, 0.0f, 0.0f};
 
   // MSAA
