@@ -7,27 +7,27 @@
         "vsync": true
     },
     "ray_marcher": {
-        "max_steps": 256,
-        "max_distance": 100.0,
-        "min_hit_eps": 5e-5,
-        "relative_hit_eps": 3e-4,
-        "step_safety_factor": 0.8
+        "max_steps": 200,
+        "max_distance": 10.0,
+        "min_hit_eps": 2e-5,
+        "relative_hit_eps": 2e-4,
+        "step_safety_factor": 0.9
     },
     "normals": {
-        "min_eps": 1e-4,
-        "relative_eps": 3e-4
+        "min_eps": 5e-5,
+        "relative_eps": 2e-4
     },
     "lighting": {
         "ambient": 0.15,
-        "diffuse_strength": 0.7,
-        "specular_strength": 0.15,
-        "specular_power": 32.0,
+        "diffuse_strength": 0.75,
+        "specular_strength": 0.2,
+        "specular_power": 48.0,
         "base_color": [0.75, 0.78, 0.82],
         "background_bottom": [0.12, 0.12, 0.14],
         "background_top": [0.22, 0.22, 0.25]
     },
     "camera": {
-        "initial_distance": 0.5,
+        "initial_distance": 0.3,
         "initial_azimuth": 0.5,
         "initial_elevation": 0.3,
         "initial_target": [0.0, 0.0, 0.0],
@@ -36,7 +36,7 @@
     "export": {
         "format": "stl_binary",
         "scale_factor": 1000.0,
-        "max_voxels_per_dim": 512,
+        "max_voxels_per_dim": 256,
         "min_voxel_size": 0.0,
         "auto_resolution": true
     },
@@ -46,7 +46,7 @@
         "curvature_threshold": 0.01
     },
     "scene": {
-        "file": "scenes/scene.json",
+        "file": "scenes/test_nozzle.json",
         "display_mode": "auto"
     }
 }
