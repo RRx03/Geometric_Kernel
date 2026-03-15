@@ -1,206 +1,214 @@
+// ═══════════════════════════════════════════════════════════════
+// Renderer.cpp — Pure C++ Metal renderer via metal-cpp
+//
+// The _PRIVATE_IMPLEMENTATION defines live here.
+// Obj-C bridge (CAMetalLayer attachment) is in MetalBridge.mm.
+// ═══════════════════════════════════════════════════════════════
+
+#define NS_PRIVATE_IMPLEMENTATION
+#define CA_PRIVATE_IMPLEMENTATION
+#define MTL_PRIVATE_IMPLEMENTATION
+
+#include "../metal-cpp/Metal/Metal.hpp"
+#include "../metal-cpp/QuartzCore/QuartzCore.hpp"
+
+#include "MetalBridge.h"
 #include "Renderer.hpp"
-#include "MathUtils.h"
-#include "SDFNode.hpp"
-#include "SceneParser.hpp"
-#include "Shared.h"
+
+#include <SDL.h>
+#include <cstring>
 #include <iostream>
-Renderer::Renderer(SDL_Window *window) {
-  this->_device = MTL::CreateSystemDefaultDevice();
-  if (!this->_device) {
-    throw std::runtime_error("No Metal GPU found");
-  }
-  this->_commandQueue = this->_device->newCommandQueue();
+#include <simd/simd.h>
+#include <stdexcept>
 
-  SDL_MetalView view = SDL_Metal_CreateView(window);
-  void *layer_ptr = SDL_Metal_GetLayer(view);
+// Cast helpers — Renderer.hpp stores void* to avoid metal-cpp in the header
+#define DEV ((MTL::Device *)_device)
+#define QUEUE ((MTL::CommandQueue *)_cmdQueue)
+#define LAYER ((CA::MetalLayer *)_layer)
+#define PSO ((MTL::RenderPipelineState *)_pso)
+#define DS ((MTL::DepthStencilState *)_depthState)
+#define UBUF ((MTL::Buffer *)_uniformBuf)
+#define SBUF ((MTL::Buffer *)_sdfBuf)
+#define CBUF ((MTL::Buffer *)_countBuf)
+#define RBUF ((MTL::Buffer *)_rpBuf)
+#define MSAA ((MTL::Texture *)_msaaTex)
+#define DEPTH ((MTL::Texture *)_depthTex)
 
-  this->_layer = reinterpret_cast<CA::MetalLayer *>(layer_ptr);
+Renderer::Renderer(SDL_Window *window, const RenderConfig &config)
+    : _samples(config.msaaSamples), _cfg(config) {
 
-  this->_layer->setDevice(_device);
-  this->_layer->setPixelFormat(MTL::PixelFormatBGRA8Unorm);
+  camera.distance = config.camDistance;
+  camera.azimuth = config.camAzimuth;
+  camera.elevation = config.camElevation;
+  camera.target = simd_make_float3(config.camTarget[0], config.camTarget[1],
+                                   config.camTarget[2]);
+
+  _device = MTL::CreateSystemDefaultDevice();
+  if (!_device)
+    throw std::runtime_error("No Metal device");
+  _cmdQueue = DEV->newCommandQueue();
+
+  // Use the Obj-C bridge to attach CAMetalLayer
+  _layer = MetalBridge_AttachLayer(window, _device);
+  if (!_layer)
+    throw std::runtime_error("Failed to attach Metal layer");
 
   buildShaders();
   buildBuffers();
 }
 
 Renderer::~Renderer() {
-
-  if (_depthTexture)
-    _depthTexture->release();
-  if (_uniformBuffer)
-    _uniformBuffer->release();
-
-  if (_vertexBuffer)
-    _vertexBuffer->release();
-  if (_renderPSO)
-    _renderPSO->release();
-
-  if (_depthStencilState)
-    _depthStencilState->release();
-
-  if (_commandQueue)
-    _commandQueue->release();
-  if (_device)
-    _device->release();
-  if (_msaaTexture)
-    _msaaTexture->release();
+  if (RBUF)
+    RBUF->release();
+  if (CBUF)
+    CBUF->release();
+  if (SBUF)
+    SBUF->release();
+  if (UBUF)
+    UBUF->release();
+  if (MSAA)
+    MSAA->release();
+  if (DEPTH)
+    DEPTH->release();
+  if (DS)
+    DS->release();
+  if (PSO)
+    PSO->release();
+  if (QUEUE)
+    QUEUE->release();
+  // Device is not released (system default)
 }
 
 void Renderer::buildShaders() {
-  NS::Error *error = nullptr;
-
-  MTL::Library *defaultLibrary = _device->newLibrary(
-      NS::String::string("./build/default.metallib", NS::UTF8StringEncoding),
-      &error);
-
-  if (!defaultLibrary) {
-    std::cerr << "Erreur chargement bibliothèque Metal: "
-              << error->localizedDescription()->utf8String() << std::endl;
-    return;
+  NS::Error *err = nullptr;
+  MTL::Library *lib = DEV->newDefaultLibrary();
+  if (!lib) {
+    auto p =
+        NS::String::string("build/default.metallib", NS::UTF8StringEncoding);
+    lib = DEV->newLibrary(p, &err);
+  }
+  if (!lib) {
+    auto p2 = NS::String::string("default.metallib", NS::UTF8StringEncoding);
+    lib = DEV->newLibrary(p2, &err);
+  }
+  if (!lib) {
+    std::cerr << "Metal lib error: "
+              << (err ? err->localizedDescription()->utf8String() : "?")
+              << "\n";
+    throw std::runtime_error("Cannot load Metal shader library");
   }
 
-  MTL::Function *vertexFn = defaultLibrary->newFunction(
-      NS::String::string("vertex_main", NS::UTF8StringEncoding));
-  MTL::Function *fragFn = defaultLibrary->newFunction(
-      NS::String::string("fragment_main", NS::UTF8StringEncoding));
+    auto vFn = lib->newFunction(
+        NS::String::string("vertex_main", NS::UTF8StringEncoding));
+    auto fFn = lib->newFunction(
+        NS::String::string("fragment_main", NS::UTF8StringEncoding));
+    if (!vFn || !fFn)
+      throw std::runtime_error("Shader functions not found");
 
-  MTL::DepthStencilDescriptor *depthDesc =
-      MTL::DepthStencilDescriptor::alloc()->init();
-  depthDesc->setDepthCompareFunction(MTL::CompareFunctionLess);
-  depthDesc->setDepthWriteEnabled(true);
-  _depthStencilState = _device->newDepthStencilState(depthDesc);
-  depthDesc->release();
+    auto dsD = MTL::DepthStencilDescriptor::alloc()->init();
+    dsD->setDepthCompareFunction(MTL::CompareFunctionLess);
+    dsD->setDepthWriteEnabled(true);
+    _depthState = DEV->newDepthStencilState(dsD);
+    dsD->release();
 
-  MTL::RenderPipelineDescriptor *pipeDesc =
-      MTL::RenderPipelineDescriptor::alloc()->init();
-  pipeDesc->setVertexFunction(vertexFn);
-  pipeDesc->setFragmentFunction(fragFn);
-  pipeDesc->colorAttachments()->object(0)->setPixelFormat(
-      MTL::PixelFormatBGRA8Unorm);
-  pipeDesc->setDepthAttachmentPixelFormat(MTL::PixelFormatDepth32Float);
-  pipeDesc->setRasterSampleCount(_sampleCount);
+    auto pd = MTL::RenderPipelineDescriptor::alloc()->init();
+    pd->setVertexFunction(vFn);
+    pd->setFragmentFunction(fFn);
+    pd->colorAttachments()->object(0)->setPixelFormat(
+        MTL::PixelFormatBGRA8Unorm);
+    pd->setDepthAttachmentPixelFormat(MTL::PixelFormatDepth32Float);
+    pd->setRasterSampleCount(_samples);
 
-  _renderPSO = _device->newRenderPipelineState(pipeDesc, &error);
-  if (!_renderPSO) {
-    std::cerr << "Erreur PSO Graphique: "
-              << error->localizedDescription()->utf8String() << std::endl;
-    throw std::runtime_error("Échec création du pipeline Metal");
-  }
-
-  vertexFn->release();
-  fragFn->release();
-  pipeDesc->release();
-  defaultLibrary->release();
+    _pso = DEV->newRenderPipelineState(pd, &err);
+    if (!_pso) {
+      std::cerr << "Pipeline error: "
+                << (err ? err->localizedDescription()->utf8String() : "?")
+                << "\n";
+      throw std::runtime_error("Pipeline creation failed");
+    }
+    vFn->release();
+    fFn->release();
+    pd->release();
+    lib->release();
 }
+
 void Renderer::buildBuffers() {
-  _uniformBuffer =
-      _device->newBuffer(sizeof(Uniforms), MTL::ResourceStorageModeShared);
+  _uniformBuf =
+      DEV->newBuffer(sizeof(Uniforms), MTL::ResourceStorageModeShared);
+  int zero = 0;
+  _countBuf =
+      DEV->newBuffer(&zero, sizeof(int), MTL::ResourceStorageModeShared);
+  RenderParams rp = _cfg.toGPUParams();
+  _rpBuf =
+      DEV->newBuffer(&rp, sizeof(RenderParams), MTL::ResourceStorageModeShared);
 }
+
 void Renderer::loadGeometry(const std::vector<SDFNodeGPU> &nodes) {
-  _sdfNodeCount = (int)nodes.size();
-
-  if (_sdfBuffer) {
-    _sdfBuffer->release();
+  _sdfCount = (int)nodes.size();
+  if (SBUF) {
+    SBUF->release();
+    _sdfBuf = nullptr;
   }
-
-  if (_sdfNodeCount > 0) {
-    _sdfBuffer =
-        _device->newBuffer(nodes.data(), nodes.size() * sizeof(SDFNodeGPU),
-                           MTL::ResourceStorageModeShared);
-  }
-}
-void Renderer::orbit(float dx, float dy) {
-  _camAzimuth -= dx * 0.01f;
-  _camElevation += dy * 0.01f;
-  _camElevation = std::max(-1.5f, std::min(1.5f, _camElevation));
+  if (_sdfCount > 0)
+    _sdfBuf = DEV->newBuffer(nodes.data(), nodes.size() * sizeof(SDFNodeGPU),
+                             MTL::ResourceStorageModeShared);
+  memcpy(CBUF->contents(), &_sdfCount, sizeof(int));
 }
 
-void Renderer::pan(float dx, float dy) {
-  // Pan speed proportional to camera distance (slower when close)
-  float panSpeed = _camDistance * 0.003f; // était 0.01f fixe
-  _camTarget.x -=
-      cos(_camAzimuth) * dx * panSpeed + sin(_camAzimuth) * dy * panSpeed;
-  _camTarget.y += dy * panSpeed;
-  _camTarget.z -=
-      sin(_camAzimuth) * dx * panSpeed - cos(_camAzimuth) * dy * panSpeed;
+void Renderer::updateRenderParams(const RenderConfig &config) {
+  _cfg = config;
+  RenderParams rp = config.toGPUParams();
+  memcpy(RBUF->contents(), &rp, sizeof(RenderParams));
 }
 
-void Renderer::zoom(float dz) {
-  float zoomSpeed = _camDistance * 0.15f; // proportionnel à la distance
-  _camDistance -= dz * zoomSpeed;
-  _camDistance = std::max(0.001f, _camDistance); // était 0.5f
-}
-void Renderer::updateUniforms() {
-  Uniforms u;
-
-  float cx =
-      _camTarget.x + _camDistance * cos(_camElevation) * sin(_camAzimuth);
-  float cy = _camTarget.y + _camDistance * sin(_camElevation);
-  float cz =
-      _camTarget.z + _camDistance * cos(_camElevation) * cos(_camAzimuth);
-
-  u.camPos = {cx, cy, cz};
-
-  u.camForward = simd_normalize(_camTarget - u.camPos);
-  simd::float3 worldUp = {0.0f, 1.0f, 0.0f};
-  u.camRight = simd_normalize(simd_cross(worldUp, u.camForward));
-  u.camUp = simd_cross(u.camForward, u.camRight);
-
-  void *ptr = _uniformBuffer->contents();
-  memcpy(ptr, &u, sizeof(Uniforms));
-}
-
-void Renderer::resize(int width, int height) {
-  _width = width;
-  _height = height;
-  _layer->setDrawableSize(CGSizeMake(width, height));
-
-  if (_msaaTexture)
-    _msaaTexture->release();
-  if (_depthTexture)
-    _depthTexture->release();
-
-  MTL::TextureDescriptor *msaaDesc = MTL::TextureDescriptor::alloc()->init();
-  msaaDesc->setTextureType(MTL::TextureType2DMultisample);
-  msaaDesc->setPixelFormat(MTL::PixelFormatBGRA8Unorm);
-  msaaDesc->setWidth(width);
-  msaaDesc->setHeight(height);
-  msaaDesc->setSampleCount(_sampleCount);
-  msaaDesc->setUsage(MTL::TextureUsageRenderTarget);
-  msaaDesc->setStorageMode(MTL::StorageModePrivate);
-
-  _msaaTexture = _device->newTexture(msaaDesc);
-  msaaDesc->release();
-
-  MTL::TextureDescriptor *depthDesc = MTL::TextureDescriptor::alloc()->init();
-  depthDesc->setTextureType(MTL::TextureType2DMultisample);
-  depthDesc->setPixelFormat(MTL::PixelFormatDepth32Float);
-  depthDesc->setWidth(width);
-  depthDesc->setHeight(height);
-  depthDesc->setSampleCount(_sampleCount);
-  depthDesc->setUsage(MTL::TextureUsageRenderTarget);
-  depthDesc->setStorageMode(MTL::StorageModePrivate);
-
-  _depthTexture = _device->newTexture(depthDesc);
-  depthDesc->release();
-}
-
-void Renderer::renderFrame() {
-  if (!_renderPSO)
+void Renderer::resize(int w, int h) {
+  if (w < 1 || h < 1)
     return;
-  NS::AutoreleasePool *pool = NS::AutoreleasePool::alloc()->init();
+  _width = w;
+  _height = h;
+  LAYER->setDrawableSize(CGSizeMake(w, h));
 
-  CA::MetalDrawable *drawable = _layer->nextDrawable();
-  if (!drawable) {
-    pool->release();
+  if (MSAA)
+    MSAA->release();
+  auto md = MTL::TextureDescriptor::alloc()->init();
+  md->setTextureType(MTL::TextureType2DMultisample);
+  md->setPixelFormat(MTL::PixelFormatBGRA8Unorm);
+  md->setWidth(w);
+  md->setHeight(h);
+  md->setSampleCount(_samples);
+  md->setUsage(MTL::TextureUsageRenderTarget);
+  md->setStorageMode(MTL::StorageModePrivate);
+  _msaaTex = DEV->newTexture(md);
+  md->release();
+
+  if (DEPTH)
+    DEPTH->release();
+  auto dd = MTL::TextureDescriptor::alloc()->init();
+  dd->setTextureType(MTL::TextureType2DMultisample);
+  dd->setPixelFormat(MTL::PixelFormatDepth32Float);
+  dd->setWidth(w);
+  dd->setHeight(h);
+  dd->setSampleCount(_samples);
+  dd->setUsage(MTL::TextureUsageRenderTarget);
+  dd->setStorageMode(MTL::StorageModePrivate);
+  _depthTex = DEV->newTexture(dd);
+  dd->release();
+}
+
+void Renderer::renderFrame(float dt) {
+  camera.update(dt);
+
+  Uniforms u = camera.computeUniforms();
+  memcpy(UBUF->contents(), &u, sizeof(Uniforms));
+
+  CA::MetalDrawable *drawable = LAYER->nextDrawable();
+  if (!drawable)
     return;
-  }
 
-  updateUniforms();
+  auto cmdBuf = QUEUE->commandBuffer();
+  auto rpd = MTL::RenderPassDescriptor::alloc()->init();
 
-  MTL::RenderPassDescriptor *rpd = MTL::RenderPassDescriptor::alloc()->init();
-
-  rpd->colorAttachments()->object(0)->setTexture(_msaaTexture);
+  rpd->colorAttachments()->object(0)->setTexture(MSAA);
   rpd->colorAttachments()->object(0)->setResolveTexture(drawable->texture());
   rpd->colorAttachments()->object(0)->setLoadAction(MTL::LoadActionClear);
   rpd->colorAttachments()->object(0)->setStoreAction(
@@ -208,30 +216,26 @@ void Renderer::renderFrame() {
   rpd->colorAttachments()->object(0)->setClearColor(
       MTL::ClearColor(0.15, 0.15, 0.15, 1.0));
 
-  rpd->depthAttachment()->setTexture(_depthTexture);
+  rpd->depthAttachment()->setTexture(DEPTH);
   rpd->depthAttachment()->setLoadAction(MTL::LoadActionClear);
   rpd->depthAttachment()->setStoreAction(MTL::StoreActionDontCare);
   rpd->depthAttachment()->setClearDepth(1.0);
 
-  MTL::CommandBuffer *cmd = _commandQueue->commandBuffer();
-  MTL::RenderCommandEncoder *enc = cmd->renderCommandEncoder(rpd);
-  enc->setRenderPipelineState(_renderPSO);
-  enc->setDepthStencilState(_depthStencilState);
+  auto enc = cmdBuf->renderCommandEncoder(rpd);
+  enc->setRenderPipelineState(PSO);
+  enc->setDepthStencilState(DS);
 
-  enc->setFragmentBuffer(_uniformBuffer, 0, 1);
+  enc->setFragmentBuffer(UBUF, 0, 1);
+  if (SBUF)
+    enc->setFragmentBuffer(SBUF, 0, 2);
+  enc->setFragmentBuffer(CBUF, 0, 3);
+  enc->setFragmentBuffer(RBUF, 0, 4);
 
-  if (_sdfBuffer) {
-    enc->setFragmentBuffer(_sdfBuffer, 0, 2);
-    enc->setFragmentBytes(&_sdfNodeCount, sizeof(int), 3);
-  }
-
-  enc->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, (NS::UInteger)0,
-                      (NS::UInteger)4);
+  enc->drawPrimitives(MTL::PrimitiveTypeTriangleStrip, NS::UInteger(0),
+                      NS::UInteger(4));
   enc->endEncoding();
 
-  cmd->presentDrawable(drawable);
-  cmd->commit();
-
+  cmdBuf->presentDrawable(drawable);
+  cmdBuf->commit();
   rpd->release();
-  pool->release();
 }

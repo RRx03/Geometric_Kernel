@@ -1,190 +1,232 @@
+// ═══════════════════════════════════════════════════════════════
+// main.cpp — Geometric Kernel Entry Point
+//
+// SDL2 event loop, scene loading, keyboard/mouse controls,
+// STL export, fullscreen toggle, preset views.
+// ═══════════════════════════════════════════════════════════════
+
+#include "../SDFShared.h"
 #include "Mesher.hpp"
+#include "RenderConfig.hpp"
+#include "Renderer.hpp"
 #include "SDFEvaluator.hpp"
+#include "SDFNode.hpp"
 #include "SceneParser.hpp"
-#include "metal-cpp/Foundation/Foundation.hpp"
-#include "metal-cpp/Metal/Metal.hpp"
-#include "metal-cpp/QuartzCore/QuartzCore.hpp"
-#include <Renderer.hpp>
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_metal.h>
-#include <atomic>
-#include <fstream>
+
+#include <SDL.h>
+#include <chrono>
 #include <iostream>
-#include <nlohmann/json.hpp>
-#include <simd/simd.h>
-#include <thread>
+#include <memory>
+#include <vector>
 
-// ── Auto-detect bounding box from scene JSON ──
-// Searches for a Box node and uses its bounds, or falls back to default
-static void detectBoundingBox(const std::string &sceneFile, simd::float3 &bbMin,
-                              simd::float3 &bbMax) {
-  try {
-    std::ifstream f(sceneFile);
-    if (!f.is_open())
-      return;
-    auto root = nlohmann::json::parse(f);
+int main(int argc, char *argv[]) {
+  (void)argc;
+  (void)argv;
 
-    // Recursive search for Box nodes
-    std::function<bool(const nlohmann::json &)> findBox =
-        [&](const nlohmann::json &j) -> bool {
-      if (!j.is_object())
-        return false;
-      if (j.contains("type") && j["type"] == "Box" && j.contains("bounds")) {
-        float bx = j["bounds"][0].get<float>();
-        float by = j["bounds"][1].get<float>();
-        float bz = j["bounds"][2].get<float>();
-        float px = 0, py = 0, pz = 0;
-        if (j.contains("position")) {
-          px = j["position"][0].get<float>();
-          py = j["position"][1].get<float>();
-          pz = j["position"][2].get<float>();
-        }
-        // Add margin
-        float margin = 0.01f;
-        bbMin = simd_make_float3(px - bx - margin, py - by - margin,
-                                 pz - bz - margin);
-        bbMax = simd_make_float3(px + bx + margin, py + by + margin,
-                                 pz + bz + margin);
-        return true;
-      }
-      for (auto &[key, val] : j.items()) {
-        if (findBox(val))
-          return true;
-      }
-      return false;
-    };
+  // ── Load config ──
+  RenderConfig config;
+#ifdef HAS_NLOHMANN_JSON
+    config = RenderConfig::loadFromFile("render_config.json");
+#endif
 
-    findBox(root);
-  } catch (...) {
-    // Keep defaults
-  }
-}
+    // ── Scene file (CLI override or config) ──
+    std::string sceneFile = config.sceneFile;
+    if (argc > 1)
+      sceneFile = argv[1];
 
-int main() {
-  if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-    std::cout << "Erreur Init SDL: " << SDL_GetError() << std::endl;
-    return -1;
-  }
-
-  SDL_Window *window =
-      SDL_CreateWindow("Generative Kernel", SDL_WINDOWPOS_CENTERED,
-                       SDL_WINDOWPOS_CENTERED, 800, 600,
-                       SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_METAL |
-                           SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
-
-  if (!window) {
-    std::cout << "Erreur Creation Fenetre: " << SDL_GetError() << std::endl;
-    return -1;
-  }
-
-  std::unique_ptr<Renderer> renderer;
-  try {
-    renderer = std::make_unique<Renderer>(window);
-    int width, height;
-    SDL_GetWindowSize(window, &width, &height);
-    renderer->resize(width, height);
-  } catch (const std::runtime_error &e) {
-    std::cerr << "Erreur Renderer: " << e.what() << std::endl;
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-    return -1;
-  }
-
-  // ── Charger la scène ──
-  auto myPartTree = SceneParser::parseFile("scene.json");
-  std::vector<SDFNodeGPU> flattenedTree;
-  if (myPartTree) {
-    myPartTree->flatten(flattenedTree);
-  }
-
-  std::cout << "Scene chargee: " << flattenedTree.size() << " noeuds GPU"
-            << std::endl;
-
-  renderer->loadGeometry(flattenedTree);
-  SDFEvaluator solverEvaluator(flattenedTree);
-
-  std::atomic<bool> exportInProgress{false};
-
-  // ── Auto bounding box from scene ──
-  simd::float3 bbMin = simd_make_float3(-3.0f, -3.0f, -3.0f);
-  simd::float3 bbMax = simd_make_float3(3.0f, 3.0f, 3.0f);
-  detectBoundingBox("scene.json", bbMin, bbMax);
-
-  float bbSize = simd_length(bbMax - bbMin);
-  std::cout << "Bounding box: [" << bbMin.x << "," << bbMin.y << "," << bbMin.z
-            << "] → [" << bbMax.x << "," << bbMax.y << "," << bbMax.z << "]"
-            << std::endl;
-  std::cout << "Taille diag: " << bbSize * 1000.0f << " mm" << std::endl;
-
-  constexpr float STL_EXPORT_SCALE = 1000.0f;
-
-  bool running = true;
-  SDL_Event event;
-
-  std::cout << "\n=== CONTROLES ===" << std::endl;
-  std::cout << "  Souris gauche : orbiter" << std::endl;
-  std::cout << "  Souris droite : pan" << std::endl;
-  std::cout << "  Molette       : zoom" << std::endl;
-  std::cout << "  E             : export STL (standard)" << std::endl;
-  std::cout << "  H             : export STL (haute qualite)" << std::endl;
-  std::cout << "  Unites internes: metres (SI)" << std::endl;
-  std::cout << "  Unites STL    : millimetres" << std::endl;
-  std::cout << "================\n" << std::endl;
-
-  while (running) {
-    while (SDL_PollEvent(&event)) {
-      if (event.type == SDL_QUIT)
-        running = false;
-
-      if (event.type == SDL_WINDOWEVENT &&
-          event.window.event == SDL_WINDOWEVENT_RESIZED)
-        renderer->resize(event.window.data1, event.window.data2);
-
-      if (event.type == SDL_MOUSEMOTION) {
-        if (event.motion.state & SDL_BUTTON_LMASK)
-          renderer->orbit(event.motion.xrel, event.motion.yrel);
-        else if (event.motion.state & SDL_BUTTON_RMASK)
-          renderer->pan(event.motion.xrel, event.motion.yrel);
-      }
-
-      if (event.type == SDL_MOUSEWHEEL)
-        renderer->zoom(event.wheel.y);
-
-      if (event.type == SDL_KEYDOWN) {
-        float res = 0.0f;
-        std::string filename;
-
-        // E = standard (~100 voxels along longest axis)
-        // H = haute qualité (~300 voxels along longest axis)
-        if (event.key.keysym.sym == SDLK_e) {
-          res = bbSize / 100.0f;
-          filename = "export.stl";
-        } else if (event.key.keysym.sym == SDLK_h) {
-          res = bbSize / 300.0f;
-          filename = "export_hq.stl";
-        }
-
-        if (res > 0.0f && !exportInProgress.load()) {
-          exportInProgress.store(true);
-          std::thread exportThread([&solverEvaluator, &exportInProgress, bbMin,
-                                    bbMax, res, filename]() {
-            Mesher::generateSTL(solverEvaluator, bbMin, bbMax, res, filename,
-                                STL_EXPORT_SCALE);
-            exportInProgress.store(false);
-          });
-          exportThread.detach();
-        } else if (res > 0.0f) {
-          std::cout << ">>> Export deja en cours..." << std::endl;
-        }
-      }
+    // ── Init SDL ──
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+      std::cerr << "SDL Init error: " << SDL_GetError() << "\n";
+      return -1;
     }
 
-    renderer->renderFrame();
-    SDL_Delay(10);
-  }
+    Uint32 winFlags = SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_METAL |
+                      SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE;
+    if (config.fullscreen)
+      winFlags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 
-  SDL_DestroyWindow(window);
-  SDL_Quit();
-  std::cout << "Fermeture." << std::endl;
-  return 0;
+    SDL_Window *window = SDL_CreateWindow(
+        "Geometric Kernel", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        config.windowWidth, config.windowHeight, winFlags);
+
+    if (!window) {
+      std::cerr << "Window error: " << SDL_GetError() << "\n";
+      SDL_Quit();
+      return -1;
+    }
+
+    // ── Renderer ──
+    std::unique_ptr<Renderer> renderer;
+    try {
+      renderer = std::make_unique<Renderer>(window, config);
+      int w, h;
+      SDL_Metal_GetDrawableSize(window, &w, &h);
+      renderer->resize(w, h);
+    } catch (const std::exception &e) {
+      std::cerr << "Renderer error: " << e.what() << "\n";
+      SDL_DestroyWindow(window);
+      SDL_Quit();
+      return -1;
+    }
+
+    // ── Load scene ──
+    std::vector<SDFNodeGPU> gpuBuffer;
+    SDFEvaluator *evaluatorPtr = nullptr;
+
+    try {
+      auto scene = SceneParser::parseFile(sceneFile);
+      if (scene.root) {
+        scene.root->flatten(gpuBuffer);
+        renderer->loadGeometry(gpuBuffer);
+        std::cout << "[Main] Scene '" << sceneFile << "': " << gpuBuffer.size()
+                  << " GPU nodes\n";
+      }
+    } catch (const std::exception &e) {
+      std::cerr << "[Main] Scene load error: " << e.what() << "\n";
+      std::cout << "[Main] Running with empty scene.\n";
+    }
+
+    // Create evaluator for STL export and auto-framing
+    SDFEvaluator evaluator(gpuBuffer);
+    evaluatorPtr = &evaluator;
+
+    // Auto-frame camera to fit the geometry
+    if (config.autoFrame && !gpuBuffer.empty()) {
+      renderer->camera.autoFrame(evaluator.boundsMin(), evaluator.boundsMax());
+    }
+
+    // ── Main loop ──
+    bool running = true;
+    bool mouseLeftDown = false, mouseRightDown = false;
+    bool fullscreen = config.fullscreen;
+
+    auto lastTime = std::chrono::high_resolution_clock::now();
+
+    std::cout << "\n[Controls]\n"
+              << "  Left-drag : Orbit\n"
+              << "  Right-drag: Pan\n"
+              << "  Scroll    : Zoom\n"
+              << "  R         : Reset view\n"
+              << "  F         : Auto-frame\n"
+              << "  F11       : Toggle fullscreen\n"
+              << "  1/2/3/4   : Front/Right/Top/3-4 view\n"
+              << "  E         : Export STL\n"
+              << "  Esc       : Quit\n\n";
+
+    while (running) {
+      // Delta time
+      auto now = std::chrono::high_resolution_clock::now();
+      float dt = std::chrono::duration<float>(now - lastTime).count();
+      lastTime = now;
+
+      SDL_Event ev;
+      while (SDL_PollEvent(&ev)) {
+        switch (ev.type) {
+
+        case SDL_QUIT:
+          running = false;
+          break;
+
+        case SDL_WINDOWEVENT:
+          if (ev.window.event == SDL_WINDOWEVENT_RESIZED ||
+              ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+            int w, h;
+            SDL_Metal_GetDrawableSize(window, &w, &h);
+            renderer->resize(w, h);
+          }
+          break;
+
+        case SDL_KEYDOWN:
+          switch (ev.key.keysym.sym) {
+          case SDLK_ESCAPE:
+            running = false;
+            break;
+          case SDLK_r:
+            renderer->camera.resetView();
+            if (config.autoFrame && !gpuBuffer.empty())
+              renderer->camera.autoFrame(evaluator.boundsMin(),
+                                         evaluator.boundsMax());
+            break;
+          case SDLK_f:
+            if (!gpuBuffer.empty())
+              renderer->camera.autoFrame(evaluator.boundsMin(),
+                                         evaluator.boundsMax());
+            break;
+          case SDLK_F11:
+            fullscreen = !fullscreen;
+            SDL_SetWindowFullscreen(
+                window, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+            break;
+          case SDLK_1:
+            renderer->camera.viewFront();
+            break;
+          case SDLK_2:
+            renderer->camera.viewRight();
+            break;
+          case SDLK_3:
+            renderer->camera.viewTop();
+            break;
+          case SDLK_4:
+            renderer->camera.viewThreeQtr();
+            break;
+          case SDLK_e:
+            if (evaluatorPtr && !gpuBuffer.empty()) {
+              std::cout << "[Main] Exporting STL...\n";
+              Mesher::exportSTL(*evaluatorPtr, "export.stl",
+                                config.minVoxelSize, config.maxVoxelsPerDim,
+                                config.exportScale);
+            }
+            break;
+          default:
+            break;
+          }
+          break;
+
+        case SDL_MOUSEBUTTONDOWN:
+          if (ev.button.button == SDL_BUTTON_LEFT)
+            mouseLeftDown = true;
+          if (ev.button.button == SDL_BUTTON_RIGHT)
+            mouseRightDown = true;
+          // Double-click left = auto-frame
+          if (ev.button.button == SDL_BUTTON_LEFT && ev.button.clicks == 2) {
+            if (!gpuBuffer.empty())
+              renderer->camera.autoFrame(evaluator.boundsMin(),
+                                         evaluator.boundsMax());
+          }
+          break;
+
+        case SDL_MOUSEBUTTONUP:
+          if (ev.button.button == SDL_BUTTON_LEFT)
+            mouseLeftDown = false;
+          if (ev.button.button == SDL_BUTTON_RIGHT)
+            mouseRightDown = false;
+          break;
+
+        case SDL_MOUSEMOTION:
+          if (mouseLeftDown) {
+            renderer->camera.orbit((float)ev.motion.xrel,
+                                   (float)ev.motion.yrel);
+          }
+          if (mouseRightDown) {
+            renderer->camera.pan((float)ev.motion.xrel, (float)ev.motion.yrel);
+          }
+          break;
+
+        case SDL_MOUSEWHEEL:
+          renderer->camera.zoom((float)ev.wheel.y);
+          break;
+        }
+      }
+
+      // Render
+      renderer->renderFrame(dt);
+    }
+
+    // ── Cleanup ──
+    renderer.reset();
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+
+    std::cout << "[Main] Shutdown complete.\n";
+    return 0;
 }

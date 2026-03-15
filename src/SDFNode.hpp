@@ -1,5 +1,6 @@
 #pragma once
-#include "SDFShared.h"
+#include "../SDFShared.h"
+#include <cmath>
 #include <memory>
 #include <simd/simd.h>
 #include <vector>
@@ -8,288 +9,264 @@ namespace Geometry {
 
 class SDFNode {
 public:
-  virtual ~SDFNode() = default;
-  virtual int flatten(std::vector<SDFNodeGPU> &buffer) const = 0;
+    virtual ~SDFNode() = default;
+    virtual int flatten(std::vector<SDFNodeGPU>& buffer) const = 0;
 };
 
-// ══════════════════════════════════════════════════════════
+inline SDFNodeGPU makeNode() {
+    SDFNodeGPU n{};
+    n.type = SDF_DATA_CARRIER;
+    n.leftChildIndex = -1;
+    n.rightChildIndex = -1;
+    return n;
+}
+
+// ═══════════════════════════════════════════════════════════
 // Primitives 3D
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 
 class Sphere : public SDFNode {
 public:
-  simd::float3 position;
-  float radius;
-  Sphere(simd::float3 pos, float r) : position(pos), radius(r) {}
-  int flatten(std::vector<SDFNodeGPU> &buffer) const override {
-    SDFNodeGPU n = {};
-    n.type = SDF_TYPE_SPHERE;
-    n.leftChildIndex = -1;
-    n.rightChildIndex = -1;
-    n.position = position;
-    n.params = {radius, 0, 0, 0};
-    buffer.push_back(n);
-    return (int)buffer.size() - 1;
-  }
+    simd::float3 center; float radius;
+    Sphere(simd::float3 c, float r) : center(c), radius(r) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        SDFNodeGPU n = makeNode(); n.type = SDF_TYPE_SPHERE;
+        n.pos_x = center.x; n.pos_y = center.y; n.pos_z = center.z;
+        n.param_x = radius;
+        buf.push_back(n); return (int)buf.size() - 1;
+    }
 };
 
 class Box : public SDFNode {
 public:
-  simd::float3 position;
-  simd::float3 bounds;
-  Box(simd::float3 pos, simd::float3 b) : position(pos), bounds(b) {}
-  int flatten(std::vector<SDFNodeGPU> &buffer) const override {
-    SDFNodeGPU n = {};
-    n.type = SDF_TYPE_BOX;
-    n.leftChildIndex = -1;
-    n.rightChildIndex = -1;
-    n.position = position;
-    n.params = {bounds.x, bounds.y, bounds.z, 0};
-    buffer.push_back(n);
-    return (int)buffer.size() - 1;
-  }
+    simd::float3 center, halfExtents;
+    Box(simd::float3 c, simd::float3 h) : center(c), halfExtents(h) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        SDFNodeGPU n = makeNode(); n.type = SDF_TYPE_BOX;
+        n.pos_x = center.x; n.pos_y = center.y; n.pos_z = center.z;
+        n.param_x = halfExtents.x; n.param_y = halfExtents.y; n.param_z = halfExtents.z;
+        buf.push_back(n); return (int)buf.size() - 1;
+    }
 };
 
-// ══════════════════════════════════════════════════════════
+class Cylinder : public SDFNode {
+public:
+    simd::float3 center; float radius, halfHeight;
+    Cylinder(simd::float3 c, float r, float hh) : center(c), radius(r), halfHeight(hh) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        SDFNodeGPU n = makeNode(); n.type = SDF_TYPE_CYLINDER;
+        n.pos_x = center.x; n.pos_y = center.y; n.pos_z = center.z;
+        n.param_x = radius; n.param_y = halfHeight;
+        buf.push_back(n); return (int)buf.size() - 1;
+    }
+};
+
+class Torus : public SDFNode {
+public:
+    simd::float3 center; float majorR, minorR;
+    Torus(simd::float3 c, float R, float r) : center(c), majorR(R), minorR(r) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        SDFNodeGPU n = makeNode(); n.type = SDF_TYPE_TORUS;
+        n.pos_x = center.x; n.pos_y = center.y; n.pos_z = center.z;
+        n.param_x = majorR; n.param_y = minorR;
+        buf.push_back(n); return (int)buf.size() - 1;
+    }
+};
+
+class Capsule : public SDFNode {
+public:
+    simd::float3 pointA, pointB; float radius;
+    Capsule(simd::float3 a, simd::float3 b, float r) : pointA(a), pointB(b), radius(r) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        SDFNodeGPU n = makeNode(); n.type = SDF_TYPE_CAPSULE;
+        n.pos_x = pointA.x; n.pos_y = pointA.y; n.pos_z = pointA.z;
+        n.param_x = pointB.x; n.param_y = pointB.y; n.param_z = pointB.z;
+        n.param_w = radius;
+        buf.push_back(n); return (int)buf.size() - 1;
+    }
+};
+
+// ═══════════════════════════════════════════════════════════
 // Primitives 2D axisymétriques
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 
 class Circle2D : public SDFNode {
 public:
-  simd::float3 position;
-  float radius;
-  Circle2D(simd::float3 pos, float r) : position(pos), radius(r) {}
-  int flatten(std::vector<SDFNodeGPU> &buffer) const override {
-    SDFNodeGPU n = {};
-    n.type = SDF_TYPE_CIRCLE_2D;
-    n.leftChildIndex = -1;
-    n.rightChildIndex = -1;
-    n.position = position;
-    n.params = {radius, 0, 0, 0};
-    buffer.push_back(n);
-    return (int)buffer.size() - 1;
-  }
+    simd::float2 center; float radius;
+    Circle2D(simd::float2 c, float r) : center(c), radius(r) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        SDFNodeGPU n = makeNode(); n.type = SDF_TYPE_CIRCLE_2D;
+        n.pos_x = center.x; n.pos_y = center.y;
+        n.param_x = radius;
+        buf.push_back(n); return (int)buf.size() - 1;
+    }
 };
 
 class Rect2D : public SDFNode {
 public:
-  simd::float3 position;
-  simd::float3 bounds;
-  Rect2D(simd::float3 pos, simd::float3 b) : position(pos), bounds(b) {}
-  int flatten(std::vector<SDFNodeGPU> &buffer) const override {
-    SDFNodeGPU n = {};
-    n.type = SDF_TYPE_RECT_2D;
-    n.leftChildIndex = -1;
-    n.rightChildIndex = -1;
-    n.position = position;
-    n.params = {bounds.x, bounds.y, 0, 0};
-    buffer.push_back(n);
-    return (int)buffer.size() - 1;
-  }
+    simd::float2 center, halfExtents;
+    Rect2D(simd::float2 c, simd::float2 h) : center(c), halfExtents(h) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        SDFNodeGPU n = makeNode(); n.type = SDF_TYPE_RECT_2D;
+        n.pos_x = center.x; n.pos_y = center.y;
+        n.param_x = halfExtents.x; n.param_y = halfExtents.y;
+        buf.push_back(n); return (int)buf.size() - 1;
+    }
 };
 
 class Bezier2D : public SDFNode {
 public:
-  simd::float2 p0, p1, p2;
-  float thickness;
-  Bezier2D(simd::float2 a, simd::float2 b, simd::float2 c, float t)
-      : p0(a), p1(b), p2(c), thickness(t) {}
-  int flatten(std::vector<SDFNodeGPU> &buffer) const override {
-    SDFNodeGPU n = {};
-    n.type = SDF_TYPE_BEZIER2D;
-    n.leftChildIndex = -1;
-    n.rightChildIndex = -1;
-    n.position = {p0.x, p0.y, thickness};
-    n.params = {p1.x, p1.y, p2.x, p2.y};
-    buffer.push_back(n);
-    return (int)buffer.size() - 1;
-  }
+    simd::float2 p0, p1, p2; float thickness;
+    Bezier2D(simd::float2 a, simd::float2 b, simd::float2 c, float t)
+        : p0(a), p1(b), p2(c), thickness(t) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        SDFNodeGPU n = makeNode(); n.type = SDF_TYPE_BEZIER2D;
+        n.pos_x = p0.x; n.pos_y = p0.y; n.pos_z = thickness;
+        n.param_x = p1.x; n.param_y = p1.y; n.param_z = p2.x; n.param_w = p2.y;
+        buf.push_back(n); return (int)buf.size() - 1;
+    }
 };
 
 class CubicBezier2D : public SDFNode {
 public:
-  simd::float2 p0, p1, p2, p3;
-  float thickness;
-  CubicBezier2D(simd::float2 a, simd::float2 b, simd::float2 c, simd::float2 d,
-                float t)
-      : p0(a), p1(b), p2(c), p3(d), thickness(t) {}
-  int flatten(std::vector<SDFNodeGPU> &buffer) const override {
-    SDFNodeGPU n0 = {};
-    n0.type = SDF_TYPE_CUBIC_BEZIER2D;
-    n0.leftChildIndex = -1;
-    n0.rightChildIndex = -1;
-    n0.position = {p0.x, p0.y, thickness};
-    n0.params = {p1.x, p1.y, p2.x, p2.y};
-    SDFNodeGPU n1 = {};
-    n1.type = SDF_DATA_CARRIER;
-    n1.leftChildIndex = -1;
-    n1.rightChildIndex = -1;
-    n1.position = {p3.x, p3.y, 0};
-    n1.params = {0, 0, 0, 0};
-    buffer.push_back(n0);
-    buffer.push_back(n1);
-    return (int)buffer.size() - 2;
-  }
+    simd::float2 p0, p1, p2, p3; float thickness;
+    CubicBezier2D(simd::float2 a, simd::float2 b, simd::float2 c, simd::float2 d, float t)
+        : p0(a), p1(b), p2(c), p3(d), thickness(t) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        SDFNodeGPU n0 = makeNode(); n0.type = SDF_TYPE_CUBIC_BEZIER2D;
+        n0.pos_x = p0.x; n0.pos_y = p0.y; n0.pos_z = thickness;
+        n0.param_x = p1.x; n0.param_y = p1.y; n0.param_z = p2.x; n0.param_w = p2.y;
+        SDFNodeGPU n1 = makeNode();
+        n1.pos_x = p3.x; n1.pos_y = p3.y;
+        buf.push_back(n0); buf.push_back(n1);
+        return (int)buf.size() - 2;
+    }
 };
 
-// ─────────────────────────────────────────────────────────
-// CompositeSpline2D — Profil à N points, distance SIGNÉE
-//
-// Émet un header node (SDF_TYPE_COMPOSITE_SPLINE2D) suivi de
-// ceil(N/3) nœuds DATA_CARRIER contenant les points packés.
-//
-// Le header stocke :
-//   params.x = N (nombre de points, cast en float)
-//   params.y = thickness (0 = mode demi-plan signé)
-//
-// Chaque DATA_CARRIER stocke 3 points :
-//   position = (p[k].r, p[k].y, 0)
-//   params   = (p[k+1].r, p[k+1].y, p[k+2].r, p[k+2].y)
-//
-// L'évaluateur (CPU et GPU) :
-//   1. Lit le header pour obtenir N et thickness
-//   2. Parcourt les DATA_CARRIERs pour reconstruire les points
-//   3. Décompose en segments de Bézier quadratique (B-spline)
-//   4. Calcule la distance non-signée au segment le plus proche
-//   5. Détermine le signe : r_point < r_courbe → négatif (solide)
-//   6. Retourne sign * distance - thickness
-//
-// Le résultat est un SDF signé : négatif = entre l'axe et le profil.
-// Subtract(externe, interne) fonctionne alors correctement.
-// ─────────────────────────────────────────────────────────
 class CompositeSpline2D : public SDFNode {
 public:
-  std::vector<simd::float2> points;
-  float thickness;
-
-  CompositeSpline2D(std::vector<simd::float2> pts, float t)
-      : points(std::move(pts)), thickness(t) {}
-
-  int flatten(std::vector<SDFNodeGPU> &buffer) const override {
-    int N = (int)points.size();
-    if (N < 2) {
-      // Dégénéré : un cercle
-      SDFNodeGPU n = {};
-      n.type = SDF_TYPE_CIRCLE_2D;
-      n.leftChildIndex = -1;
-      n.rightChildIndex = -1;
-      n.position = {points[0].x, points[0].y, 0};
-      n.params = {0.01f, 0, 0, 0};
-      buffer.push_back(n);
-      return (int)buffer.size() - 1;
+    std::vector<simd::float2> points; float thickness;
+    CompositeSpline2D(std::vector<simd::float2> pts, float t)
+        : points(std::move(pts)), thickness(t) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        int N = (int)points.size();
+        if (N < 2) {
+            SDFNodeGPU n = makeNode(); n.type = SDF_TYPE_CIRCLE_2D;
+            if (N == 1) { n.pos_x = points[0].x; n.pos_y = points[0].y; }
+            n.param_x = 0.001f;
+            buf.push_back(n); return (int)buf.size() - 1;
+        }
+        int headerIdx = (int)buf.size();
+        SDFNodeGPU header = makeNode(); header.type = SDF_TYPE_COMPOSITE_SPLINE2D;
+        header.param_x = (float)N; header.param_y = thickness;
+        buf.push_back(header);
+        for (int k = 0; k < N; k += 3) {
+            SDFNodeGPU dc = makeNode();
+            dc.pos_x = points[k].x; dc.pos_y = points[k].y;
+            if (k+1 < N) { dc.param_x = points[k+1].x; dc.param_y = points[k+1].y; }
+            if (k+2 < N) { dc.param_z = points[k+2].x; dc.param_w = points[k+2].y; }
+            buf.push_back(dc);
+        }
+        return headerIdx;
     }
-
-    int headerIdx = (int)buffer.size();
-
-    // Header node
-    SDFNodeGPU header = {};
-    header.type = SDF_TYPE_COMPOSITE_SPLINE2D;
-    header.leftChildIndex = -1;
-    header.rightChildIndex = -1;
-    header.position = {0, 0, 0};
-    header.params = {(float)N, thickness, 0, 0};
-    buffer.push_back(header);
-
-    // Pack points into DATA_CARRIER nodes, 3 points per node
-    for (int k = 0; k < N; k += 3) {
-      SDFNodeGPU dc = {};
-      dc.type = SDF_DATA_CARRIER;
-      dc.leftChildIndex = -1;
-      dc.rightChildIndex = -1;
-
-      // Point k+0 → position.xy
-      dc.position = {points[k].x, points[k].y, 0};
-
-      // Point k+1 → params.xy (if exists)
-      if (k + 1 < N) {
-        dc.params.x = points[k + 1].x;
-        dc.params.y = points[k + 1].y;
-      }
-      // Point k+2 → params.zw (if exists)
-      if (k + 2 < N) {
-        dc.params.z = points[k + 2].x;
-        dc.params.w = points[k + 2].y;
-      }
-
-      buffer.push_back(dc);
-    }
-
-    return headerIdx;
-  }
 };
 
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 // Opérations CSG
-// ══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 
 class Union : public SDFNode {
 public:
-  std::shared_ptr<SDFNode> left, right;
-  Union(std::shared_ptr<SDFNode> l, std::shared_ptr<SDFNode> r)
-      : left(l), right(r) {}
-  int flatten(std::vector<SDFNodeGPU> &buffer) const override {
-    int li = left->flatten(buffer);
-    int ri = right->flatten(buffer);
-    SDFNodeGPU n = {};
-    n.type = SDF_OP_UNION;
-    n.leftChildIndex = li;
-    n.rightChildIndex = ri;
-    buffer.push_back(n);
-    return (int)buffer.size() - 1;
-  }
-};
-
-class SmoothUnion : public SDFNode {
-public:
-  std::shared_ptr<SDFNode> left, right;
-  float smoothFactor;
-  SmoothUnion(std::shared_ptr<SDFNode> l, std::shared_ptr<SDFNode> r, float k)
-      : left(l), right(r), smoothFactor(k) {}
-  int flatten(std::vector<SDFNodeGPU> &buffer) const override {
-    int li = left->flatten(buffer);
-    int ri = right->flatten(buffer);
-    SDFNodeGPU n = {};
-    n.type = SDF_OP_SMOOTH_UNION;
-    n.leftChildIndex = li;
-    n.rightChildIndex = ri;
-    n.smoothFactor = smoothFactor;
-    buffer.push_back(n);
-    return (int)buffer.size() - 1;
-  }
+    std::shared_ptr<SDFNode> left, right;
+    Union(std::shared_ptr<SDFNode> l, std::shared_ptr<SDFNode> r)
+        : left(std::move(l)), right(std::move(r)) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        int li = left->flatten(buf), ri = right->flatten(buf);
+        SDFNodeGPU n = makeNode(); n.type = SDF_OP_UNION;
+        n.leftChildIndex = li; n.rightChildIndex = ri;
+        buf.push_back(n); return (int)buf.size() - 1;
+    }
 };
 
 class Subtract : public SDFNode {
 public:
-  std::shared_ptr<SDFNode> baseShape, subtractShape;
-  Subtract(std::shared_ptr<SDFNode> b, std::shared_ptr<SDFNode> s)
-      : baseShape(b), subtractShape(s) {}
-  int flatten(std::vector<SDFNodeGPU> &buffer) const override {
-    int li = baseShape->flatten(buffer);
-    int ri = subtractShape->flatten(buffer);
-    SDFNodeGPU n = {};
-    n.type = SDF_OP_SUBTRACT;
-    n.leftChildIndex = li;
-    n.rightChildIndex = ri;
-    buffer.push_back(n);
-    return (int)buffer.size() - 1;
-  }
+    std::shared_ptr<SDFNode> base, subtracted;
+    Subtract(std::shared_ptr<SDFNode> b, std::shared_ptr<SDFNode> s)
+        : base(std::move(b)), subtracted(std::move(s)) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        int li = base->flatten(buf), ri = subtracted->flatten(buf);
+        SDFNodeGPU n = makeNode(); n.type = SDF_OP_SUBTRACT;
+        n.leftChildIndex = li; n.rightChildIndex = ri;
+        buf.push_back(n); return (int)buf.size() - 1;
+    }
 };
 
 class Intersect : public SDFNode {
 public:
-  std::shared_ptr<SDFNode> left, right;
-  Intersect(std::shared_ptr<SDFNode> l, std::shared_ptr<SDFNode> r)
-      : left(l), right(r) {}
-  int flatten(std::vector<SDFNodeGPU> &buffer) const override {
-    int li = left->flatten(buffer);
-    int ri = right->flatten(buffer);
-    SDFNodeGPU n = {};
-    n.type = SDF_OP_INTERSECT;
-    n.leftChildIndex = li;
-    n.rightChildIndex = ri;
-    buffer.push_back(n);
-    return (int)buffer.size() - 1;
-  }
+    std::shared_ptr<SDFNode> left, right;
+    Intersect(std::shared_ptr<SDFNode> l, std::shared_ptr<SDFNode> r)
+        : left(std::move(l)), right(std::move(r)) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        int li = left->flatten(buf), ri = right->flatten(buf);
+        SDFNodeGPU n = makeNode(); n.type = SDF_OP_INTERSECT;
+        n.leftChildIndex = li; n.rightChildIndex = ri;
+        buf.push_back(n); return (int)buf.size() - 1;
+    }
+};
+
+class SmoothUnion : public SDFNode {
+public:
+    std::shared_ptr<SDFNode> left, right; float k;
+    SmoothUnion(std::shared_ptr<SDFNode> l, std::shared_ptr<SDFNode> r, float k_)
+        : left(std::move(l)), right(std::move(r)), k(k_) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        int li = left->flatten(buf), ri = right->flatten(buf);
+        SDFNodeGPU n = makeNode(); n.type = SDF_OP_SMOOTH_UNION;
+        n.leftChildIndex = li; n.rightChildIndex = ri;
+        n.smoothFactor = k;
+        buf.push_back(n); return (int)buf.size() - 1;
+    }
+};
+
+// ═══════════════════════════════════════════════════════════
+// Transform
+// ═══════════════════════════════════════════════════════════
+class Transform : public SDFNode {
+public:
+    std::shared_ptr<SDFNode> child;
+    simd::float3 translate; simd::float3 rotateAxis;
+    float rotateAngleRad; float scale;
+    Transform(std::shared_ptr<SDFNode> c, simd::float3 trans = {0,0,0},
+              simd::float3 axis = {0,1,0}, float angle = 0.0f, float s = 1.0f)
+        : child(std::move(c)), translate(trans), rotateAxis(axis),
+          rotateAngleRad(angle), scale(s) {}
+    int flatten(std::vector<SDFNodeGPU>& buf) const override {
+        int childIdx = child->flatten(buf);
+        float invScale = (std::abs(scale) > 1e-10f) ? 1.0f / scale : 1.0f;
+        float c_ = std::cos(-rotateAngleRad), s_ = std::sin(-rotateAngleRad), t_ = 1.0f - c_;
+        float nx = rotateAxis.x, ny = rotateAxis.y, nz = rotateAxis.z;
+        float r00=t_*nx*nx+c_,    r01=t_*nx*ny-s_*nz, r02=t_*nx*nz+s_*ny;
+        float r10=t_*nx*ny+s_*nz, r11=t_*ny*ny+c_,    r12=t_*ny*nz-s_*nx;
+        float r20=t_*nx*nz-s_*ny, r21=t_*ny*nz+s_*nx, r22=t_*nz*nz+c_;
+        float m00=invScale*r00,m01=invScale*r01,m02=invScale*r02;
+        float m10=invScale*r10,m11=invScale*r11,m12=invScale*r12;
+        float m20=invScale*r20,m21=invScale*r21,m22=invScale*r22;
+        float ox=-(m00*translate.x+m01*translate.y+m02*translate.z);
+        float oy=-(m10*translate.x+m11*translate.y+m12*translate.z);
+        float oz=-(m20*translate.x+m21*translate.y+m22*translate.z);
+
+        SDFNodeGPU n = makeNode(); n.type = SDF_OP_TRANSFORM;
+        n.leftChildIndex = childIdx; n.param_x = scale;
+        SDFNodeGPU dc0 = makeNode();
+        dc0.pos_x=m00; dc0.pos_y=m01; dc0.pos_z=m02;
+        dc0.param_x=ox; dc0.param_y=m10; dc0.param_z=m11; dc0.param_w=m12;
+        SDFNodeGPU dc1 = makeNode();
+        dc1.pos_x=oy; dc1.pos_y=m20; dc1.pos_z=m21;
+        dc1.param_x=m22; dc1.param_y=oz;
+
+        buf.push_back(n); buf.push_back(dc0); buf.push_back(dc1);
+        return (int)buf.size() - 3;
+    }
 };
 
 } // namespace Geometry
