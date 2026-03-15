@@ -1,5 +1,4 @@
 #pragma once
-
 #include "SDFShared.h"
 #include <memory>
 #include <simd/simd.h>
@@ -133,6 +132,31 @@ public:
   }
 };
 
+// ─────────────────────────────────────────────────────────
+// CompositeSpline2D — Profil à N points, distance SIGNÉE
+//
+// Émet un header node (SDF_TYPE_COMPOSITE_SPLINE2D) suivi de
+// ceil(N/3) nœuds DATA_CARRIER contenant les points packés.
+//
+// Le header stocke :
+//   params.x = N (nombre de points, cast en float)
+//   params.y = thickness (0 = mode demi-plan signé)
+//
+// Chaque DATA_CARRIER stocke 3 points :
+//   position = (p[k].r, p[k].y, 0)
+//   params   = (p[k+1].r, p[k+1].y, p[k+2].r, p[k+2].y)
+//
+// L'évaluateur (CPU et GPU) :
+//   1. Lit le header pour obtenir N et thickness
+//   2. Parcourt les DATA_CARRIERs pour reconstruire les points
+//   3. Décompose en segments de Bézier quadratique (B-spline)
+//   4. Calcule la distance non-signée au segment le plus proche
+//   5. Détermine le signe : r_point < r_courbe → négatif (solide)
+//   6. Retourne sign * distance - thickness
+//
+// Le résultat est un SDF signé : négatif = entre l'axe et le profil.
+// Subtract(externe, interne) fonctionne alors correctement.
+// ─────────────────────────────────────────────────────────
 class CompositeSpline2D : public SDFNode {
 public:
   std::vector<simd::float2> points;
@@ -143,8 +167,8 @@ public:
 
   int flatten(std::vector<SDFNodeGPU> &buffer) const override {
     int N = (int)points.size();
-
     if (N < 2) {
+      // Dégénéré : un cercle
       SDFNodeGPU n = {};
       n.type = SDF_TYPE_CIRCLE_2D;
       n.leftChildIndex = -1;
@@ -155,59 +179,42 @@ public:
       return (int)buffer.size() - 1;
     }
 
-    if (N == 2) {
-      simd::float2 mid = (points[0] + points[1]) * 0.5f;
-      return emitSegment(buffer, points[0], mid, points[1]);
+    int headerIdx = (int)buffer.size();
+
+    // Header node
+    SDFNodeGPU header = {};
+    header.type = SDF_TYPE_COMPOSITE_SPLINE2D;
+    header.leftChildIndex = -1;
+    header.rightChildIndex = -1;
+    header.position = {0, 0, 0};
+    header.params = {(float)N, thickness, 0, 0};
+    buffer.push_back(header);
+
+    // Pack points into DATA_CARRIER nodes, 3 points per node
+    for (int k = 0; k < N; k += 3) {
+      SDFNodeGPU dc = {};
+      dc.type = SDF_DATA_CARRIER;
+      dc.leftChildIndex = -1;
+      dc.rightChildIndex = -1;
+
+      // Point k+0 → position.xy
+      dc.position = {points[k].x, points[k].y, 0};
+
+      // Point k+1 → params.xy (if exists)
+      if (k + 1 < N) {
+        dc.params.x = points[k + 1].x;
+        dc.params.y = points[k + 1].y;
+      }
+      // Point k+2 → params.zw (if exists)
+      if (k + 2 < N) {
+        dc.params.z = points[k + 2].x;
+        dc.params.w = points[k + 2].y;
+      }
+
+      buffer.push_back(dc);
     }
 
-    if (N == 3) {
-      return emitSegment(buffer, points[0], points[1], points[2]);
-    }
-
-    int numSegments = N - 2;
-
-    int prevIdx =
-        emitSegment(buffer, points[0], points[1], mid(points[1], points[2]));
-
-    for (int i = 1; i < numSegments - 1; i++) {
-      int segIdx =
-          emitSegment(buffer, mid(points[i], points[i + 1]), points[i + 1],
-                      mid(points[i + 1], points[i + 2]));
-      prevIdx = emitUnion(buffer, prevIdx, segIdx);
-    }
-
-    int lastIdx = emitSegment(buffer, mid(points[N - 3], points[N - 2]),
-                              points[N - 2], points[N - 1]);
-    prevIdx = emitUnion(buffer, prevIdx, lastIdx);
-
-    return prevIdx;
-  }
-
-private:
-  static simd::float2 mid(simd::float2 a, simd::float2 b) {
-    return (a + b) * 0.5f;
-  }
-
-  int emitSegment(std::vector<SDFNodeGPU> &buffer, simd::float2 start,
-                  simd::float2 control, simd::float2 end) const {
-    SDFNodeGPU n = {};
-    n.type = SDF_TYPE_BEZIER2D;
-    n.leftChildIndex = -1;
-    n.rightChildIndex = -1;
-    n.position = {start.x, start.y, thickness};
-    n.params = {control.x, control.y, end.x, end.y};
-    buffer.push_back(n);
-    return (int)buffer.size() - 1;
-  }
-
-  int emitUnion(std::vector<SDFNodeGPU> &buffer, int leftIdx,
-                int rightIdx) const {
-    SDFNodeGPU n = {};
-    n.type = SDF_OP_UNION;
-    n.leftChildIndex = leftIdx;
-    n.rightChildIndex = rightIdx;
-    buffer.push_back(n);
-    return (int)buffer.size() - 1;
+    return headerIdx;
   }
 };
 

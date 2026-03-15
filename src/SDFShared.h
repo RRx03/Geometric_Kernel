@@ -24,6 +24,44 @@ enum SDFNodeType {
   SDF_TYPE_BEZIER2D = 5,
   SDF_TYPE_CUBIC_BEZIER2D = 6,
 
+  // ─────────────────────────────────────────────────────────
+  // Composite Spline 2D — Profil signé à N points
+  //
+  // Un seul nœud GPU logique qui encode un profil composite.
+  //
+  // Layout dans le buffer plat :
+  //   nodes[i]   : type = SDF_TYPE_COMPOSITE_SPLINE2D
+  //                params.x = nombre de points N (cast en float)
+  //                params.y = thickness (0 = demi-plan signé)
+  //                position = (0, 0, 0) réservé
+  //
+  //   nodes[i+1] : type = SDF_DATA_CARRIER
+  //                position = (point0.r, point0.y, 0)
+  //                params   = (point1.r, point1.y, point2.r, point2.y)
+  //
+  //   nodes[i+2] : type = SDF_DATA_CARRIER
+  //                position = (point3.r, point3.y, 0)
+  //                params   = (point4.r, point4.y, point5.r, point5.y)
+  //
+  //   ... (on pack 5 points dans le premier DATA_CARRIER,
+  //        puis 5 par DATA_CARRIER suivant)
+  //
+  // Packing : chaque DATA_CARRIER stocke jusqu'à 5 points :
+  //   position.x, position.y = point[k+0]
+  //   params.x, params.y     = point[k+1]  (si existe)
+  //   params.z, params.w     = point[k+2]  (si existe)
+  //   → Non, simplifions : 3 points par DATA_CARRIER :
+  //     position = (p0.r, p0.y, 0)
+  //     params   = (p1.r, p1.y, p2.r, p2.y)
+  //   → 3 points par nœud. Pour N points, ceil(N/3) DATA_CARRIERs.
+  //
+  // L'évaluateur (CPU et GPU) lit le header, puis parcourt
+  // les DATA_CARRIERs pour reconstruire les points, décompose
+  // en segments de Bézier quadratique (B-spline ouverte),
+  // et calcule la distance signée au profil complet.
+  // ─────────────────────────────────────────────────────────
+  SDF_TYPE_COMPOSITE_SPLINE2D = 7,
+
   // Opérations booléennes CSG
   SDF_OP_UNION = 10,
   SDF_OP_SUBTRACT = 11,
