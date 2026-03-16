@@ -176,7 +176,7 @@ int bezCross(float2 p, float2 A, float2 B, float2 C) {
         // Degenerate to linear: qb * t + qc = 0
         if (abs(qb) > 1e-8) {
             float t = -qc / qb;
-            if (t > 0.0 && t < 1.0) {
+            if (t >= 0.0 && t < 1.0) {
                 float u = 1.0 - t;
                 float rx = u * u * A.x + 2.0 * u * t * B.x + t * t * C.x;
                 if (rx > p.x) cnt++;
@@ -193,12 +193,12 @@ int bezCross(float2 p, float2 A, float2 B, float2 C) {
     float t1 = (-qb + sq) * inv2a;
     float t2 = (-qb - sq) * inv2a;
 
-    if (t1 > 0.0 && t1 < 1.0) {
+    if (t1 >= 0.0 && t1 < 1.0) {
         float u = 1.0 - t1;
         float rx = u * u * A.x + 2.0 * u * t1 * B.x + t1 * t1 * C.x;
         if (rx > p.x) cnt++;
     }
-    if (t2 > 0.0 && t2 < 1.0) {
+    if (t2 >= 0.0 && t2 < 1.0) {
         float u = 1.0 - t2;
         float rx = u * u * A.x + 2.0 * u * t2 * B.x + t2 * t2 * C.x;
         if (rx > p.x) cnt++;
@@ -270,20 +270,24 @@ float sdCS(float2 p, constant SDFNodeGPU* nd, int hi, int N, float th) {
     //   (AXIS_R, firstPt.y) → firstPt
     // where AXIS_R = -1e-4 (matches CPU).
     // ════════════════════════════════════════════════════════
+
+    // Perturb query Y to avoid exact knot alignment (matches CPU)
+    float2 sp = float2(p.x, p.y + 7.31e-7);
+
     int cx = 0;
 
     // Crossings on each Bézier segment of the B-spline
     if (N == 2) {
-        cx += bezCross(p, pts[0], (pts[0] + pts[1]) * 0.5, pts[1]);
+        cx += bezCross(sp, pts[0], (pts[0] + pts[1]) * 0.5, pts[1]);
     } else if (N == 3) {
-        cx += bezCross(p, pts[0], pts[1], pts[2]);
+        cx += bezCross(sp, pts[0], pts[1], pts[2]);
     } else {
-        cx += bezCross(p, pts[0], pts[1], (pts[1] + pts[2]) * 0.5);
+        cx += bezCross(sp, pts[0], pts[1], (pts[1] + pts[2]) * 0.5);
         for (int s = 1; s < N - 3; s++)
-            cx += bezCross(p,
+            cx += bezCross(sp,
                 (pts[s] + pts[s+1]) * 0.5, pts[s+1],
                 (pts[s+1] + pts[s+2]) * 0.5);
-        cx += bezCross(p, (pts[N-3] + pts[N-2]) * 0.5, pts[N-2], pts[N-1]);
+        cx += bezCross(sp, (pts[N-3] + pts[N-2]) * 0.5, pts[N-2], pts[N-1]);
     }
 
     // Closure through axis at r = -1e-4 (matching CPU AXIS_R)
@@ -293,9 +297,9 @@ float sdCS(float2 p, constant SDFNodeGPU* nd, int hi, int N, float th) {
     float2 axEnd   = float2(AXIS_R, lastPt.y);
     float2 axStart = float2(AXIS_R, firstPt.y);
 
-    cx += lineCross(p, lastPt, axEnd);
-    cx += lineCross(p, axEnd, axStart);
-    cx += lineCross(p, axStart, firstPt);
+    cx += lineCross(sp, lastPt, axEnd);
+    cx += lineCross(sp, axEnd, axStart);
+    cx += lineCross(sp, axStart, firstPt);
 
     return (cx & 1) ? -md : md;
 }
