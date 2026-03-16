@@ -14,9 +14,11 @@
 #include "SceneParser.hpp"
 
 #include <SDL.h>
+#include <atomic>
 #include <chrono>
 #include <iostream>
 #include <memory>
+#include <thread>
 #include <vector>
 
 int main(int argc, char *argv[]) {
@@ -171,10 +173,25 @@ int main(int argc, char *argv[]) {
             break;
           case SDLK_e:
             if (evaluatorPtr && !gpuBuffer.empty()) {
-              std::cout << "[Main] Exporting STL...\n";
-              Mesher::exportSTL(*evaluatorPtr, "export.stl",
-                                config.minVoxelSize, config.maxVoxelsPerDim,
-                                config.exportScale);
+              // Non-blocking export in background thread
+              static bool exporting = false;
+              if (!exporting) {
+                exporting = true;
+                // Capture by value for thread safety
+                auto evalCopy = *evaluatorPtr;
+                float voxSize = config.minVoxelSize;
+                int maxVPD = config.maxVoxelsPerDim;
+                float scale = config.exportScale;
+                std::thread([evalCopy, voxSize, maxVPD, scale]() {
+                  std::cout << "[Export] Starting STL export (background)...\n";
+                  Mesher::exportSTL(evalCopy, "export.stl", voxSize, maxVPD,
+                                    scale);
+                  std::cout << "[Export] Done! File: export.stl\n";
+                  exporting = false;
+                }).detach();
+              } else {
+                std::cout << "[Export] Already exporting, please wait.\n";
+              }
             }
             break;
           default:
@@ -218,8 +235,8 @@ int main(int argc, char *argv[]) {
         }
       }
 
-      // Render
-      renderer->renderFrame(dt);
+        // Render
+        renderer->renderFrame(dt);
     }
 
     // ── Cleanup ──

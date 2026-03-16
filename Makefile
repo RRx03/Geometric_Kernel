@@ -54,9 +54,10 @@ $(BUILD)/test_primitives: tests/test_primitives.cpp SDFShared.h \
 # Full Application
 # ═══════════════════════════════════════════════════════════════
 run: $(BUILD)/kernel $(BUILD)/default.metallib
+	@cp $(BUILD)/default.metallib default.metallib
 	@echo ""
 	@echo "═══ Launching Geometric Kernel ═══"
-	@cd $(BUILD) && ./kernel ../scenes/test_nozzle.json
+	@./$(BUILD)/kernel scenes/test_nozzle.json
 
 KERNEL_OBJS = $(BUILD)/main.o $(BUILD)/Renderer.o $(BUILD)/MetalBridge.o $(BUILD)/Mesher.o
 

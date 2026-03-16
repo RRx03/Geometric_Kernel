@@ -3,26 +3,21 @@
 #include "Camera.hpp"
 #include "RenderConfig.hpp"
 #include <vector>
-
 struct SDL_Window;
 
 class Renderer {
 public:
   Renderer(SDL_Window *window, const RenderConfig &config);
   ~Renderer();
-
   void renderFrame(float dt);
   void resize(int width, int height);
   void loadGeometry(const std::vector<SDFNodeGPU> &nodes);
   void updateRenderParams(const RenderConfig &config);
-
   Camera camera;
 
-  private:
+private:
   void buildShaders();
   void buildBuffers();
-
-  // Opaque pointers — actual types from metal-cpp
   void *_device = nullptr;
   void *_cmdQueue = nullptr;
   void *_layer = nullptr;
@@ -34,9 +29,7 @@ public:
   void *_rpBuf = nullptr;
   void *_msaaTex = nullptr;
   void *_depthTex = nullptr;
-
-  int _sdfCount = 0;
-  int _width = 1280, _height = 720;
-  int _samples = 4;
+  void *_frameSema = nullptr;
+  int _sdfCount = 0, _width = 1280, _height = 720, _samples = 4;
   RenderConfig _cfg;
 };

@@ -39,10 +39,14 @@ struct SDFNodeGPU {
 
 // 64 bytes
 struct Uniforms {
-    float camPosX,   camPosY,   camPosZ;    float _p1;
-    float camFwdX,   camFwdY,   camFwdZ;    float _p2;
-    float camRightX, camRightY, camRightZ;  float _p3;
-    float camUpX,    camUpY,    camUpZ;     float _p4;
+  float camPosX, camPosY, camPosZ;
+  float aspectRatio; // width/height
+  float camFwdX, camFwdY, camFwdZ;
+  float _p2;
+  float camRightX, camRightY, camRightZ;
+  float _p3;
+  float camUpX, camUpY, camUpZ;
+  float _p4;
 };
 
 // 96 bytes

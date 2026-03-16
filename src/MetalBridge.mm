@@ -27,6 +27,13 @@ extern "C" void* MetalBridge_AttachLayer(SDL_Window* window, void* mtlDevice) {
     CAMetalLayer* layer = [CAMetalLayer layer];
     layer.device = (__bridge id<MTLDevice>)mtlDevice;
     layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+    layer.framebufferOnly = YES;           // We only render to it, don't read back
+    layer.displaySyncEnabled = YES;        // VSync — prevents tearing
+    layer.maximumDrawableCount = 3;        // Triple buffering
+
+    // Make the layer fill the view properly
+    layer.contentsGravity = kCAGravityResize;
+    layer.autoresizingMask = kCALayerWidthSizable | kCALayerHeightSizable;
 
     [view setWantsLayer:YES];
     [view setLayer:layer];
