@@ -30,6 +30,7 @@ public:
   static void exportSTL(const SDFEvaluator &evaluator,
                         const std::string &filename, float resolution,
                         int maxVoxelsPerDim, float exportScale) {
+    (void)resolution; // unused in adaptive MC mode
     int coarse = std::max(32, maxVoxelsPerDim / 8);
     exportSTL(evaluator, filename, coarse, 8, exportScale);
   }

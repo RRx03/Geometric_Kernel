@@ -176,6 +176,10 @@ void Renderer::renderFrame(float dt) {
     pool->release();
     return;
   }
+  auto drawTex = drawable->texture();
+  u.aspectRatio = (drawTex->height() > 0)
+                      ? (float)drawTex->width() / (float)drawTex->height()
+                      : 1.0f;
   auto cb = QUEUE->commandBuffer();
   dispatch_semaphore_t sem = SEMA;
   cb->addCompletedHandler(^(MTL::CommandBuffer *) {
