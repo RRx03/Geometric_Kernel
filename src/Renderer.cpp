@@ -40,7 +40,7 @@ Renderer::Renderer(SDL_Window *window, const RenderConfig &config)
   _layer = MetalBridge_AttachLayer(window, _device);
   if (!_layer)
     throw std::runtime_error("No Metal layer");
-  _frameSema = (void *)dispatch_semaphore_create(2);
+  _frameSema = (void *)dispatch_semaphore_create(1);
   buildShaders();
   buildBuffers();
 }
